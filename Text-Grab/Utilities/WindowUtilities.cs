@@ -1,24 +1,20 @@
-﻿using Dapplo.Windows.User32;
-using Fasetto.Word;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
-using Text_Grab.Extensions;
-using Text_Grab.Services;
+using Text_Grab.Properties;
 using Text_Grab.Views;
+// using Screen = System.Windows.Forms.Screen;
+using WpfScreenHelper;
 using static OSInterop;
 
 namespace Text_Grab.Utilities;
 
-public static partial class WindowUtilities
+public static class WindowUtilities
 {
-    private static Dictionary<string, bool>? fullscreenPostGrabActionStates;
-
     public static void AddTextToOpenWindow(string textToAdd)
     {
         WindowCollection allWindows = Application.Current.Windows;
@@ -33,39 +29,33 @@ public static partial class WindowUtilities
         string storedPositionString = "";
 
         if (passedWindow is EditTextWindow)
-            storedPositionString = AppUtilities.TextGrabSettings.EditTextWindowSizeAndPosition;
+            storedPositionString = Settings.Default.EditTextWindowSizeAndPosition;
 
         if (passedWindow is GrabFrame)
-            storedPositionString = AppUtilities.TextGrabSettings.GrabFrameWindowSizeAndPosition;
+            storedPositionString = Settings.Default.GrabFrameWindowSizeAndPosition;
 
-        List<string> storedPosition = [.. storedPositionString.Split(',')];
+        List<string> storedPosition = new(storedPositionString.Split(','));
 
         bool isStoredRectWithinScreen = false;
 
         if (storedPosition != null
             && storedPosition.Count == 4)
         {
-            bool couldParseX = double.TryParse(storedPosition[0], out double parsedX);
-            bool couldParseY = double.TryParse(storedPosition[1], out double parsedY);
-            bool couldParseW = double.TryParse(storedPosition[2], out double parsedWid);
-            bool couldParseH = double.TryParse(storedPosition[3], out double parsedHei);
-
-            bool couldParseAll = couldParseX && couldParseY && couldParseW && couldParseH;
-
+            bool couldParseAll = false;
+            couldParseAll = double.TryParse(storedPosition[0], out double parsedX);
+            couldParseAll = double.TryParse(storedPosition[1], out double parsedY);
+            couldParseAll = double.TryParse(storedPosition[2], out double parsedWid);
+            couldParseAll = double.TryParse(storedPosition[3], out double parsedHei);
             Rect storedSize = new((int)parsedX, (int)parsedY, (int)parsedWid, (int)parsedHei);
-            DisplayInfo[] allScreens = DisplayInfo.AllDisplayInfos;
+            IEnumerable<Screen> allScreens = Screen.AllScreens;
+            WindowCollection allWindows = Application.Current.Windows;
 
             if (parsedHei < 10 || parsedWid < 10)
                 return;
 
-            foreach (DisplayInfo screen in allScreens)
-            {
-                Rect screenRect = screen.Bounds;
-                DpiScale dpi = System.Windows.Media.VisualTreeHelper.GetDpi(passedWindow);
-                screenRect = screenRect.GetScaledDownByDpi(dpi);
-                if (screenRect.IntersectsWith(storedSize))
+            foreach (Screen screen in allScreens)
+                if (screen.WpfBounds.IntersectsWith(storedSize))
                     isStoredRectWithinScreen = true;
-            }
 
             if (isStoredRectWithinScreen && couldParseAll)
             {
@@ -81,24 +71,16 @@ public static partial class WindowUtilities
 
     public static void LaunchFullScreenGrab(TextBox? destinationTextBox = null)
     {
-        LaunchFullScreenGrab(destinationTextBox, null);
-    }
-
-    public static void LaunchFullScreenGrab(TextBox? destinationTextBox, string? preselectedTemplateId)
-    {
-        DisplayInfo[] allScreens = DisplayInfo.AllDisplayInfos;
+        IEnumerable<Screen> allScreens = Screen.AllScreens;
         WindowCollection allWindows = Application.Current.Windows;
 
-        List<FullscreenGrab> allFullscreenGrab = [];
+        List<FullscreenGrab> allFullscreenGrab = new();
 
-        int numberOfScreens = allScreens.Length;
+        int numberOfScreens = allScreens.Count();
 
         foreach (Window window in allWindows)
             if (window is FullscreenGrab grab)
                 allFullscreenGrab.Add(grab);
-
-        if (allFullscreenGrab.Count == 0)
-            ClearFullscreenPostGrabActionStates();
 
         int numberOfFullscreenGrabWindowsToCreate = numberOfScreens - allFullscreenGrab.Count;
 
@@ -111,17 +93,16 @@ public static partial class WindowUtilities
 
         double sideLength = 40;
 
-        foreach (DisplayInfo screen in allScreens)
+        foreach (Screen screen in allScreens)
         {
             FullscreenGrab fullScreenGrab = allFullscreenGrab[count];
             fullScreenGrab.WindowStartupLocation = WindowStartupLocation.Manual;
             fullScreenGrab.Width = sideLength;
             fullScreenGrab.Height = sideLength;
             fullScreenGrab.DestinationTextBox = destinationTextBox;
-            fullScreenGrab.PreselectedTemplateId = preselectedTemplateId;
             fullScreenGrab.WindowState = WindowState.Normal;
 
-            Point screenCenterPoint = screen.ScaledCenterPoint();
+            Point screenCenterPoint = screen.GetCenterPoint();
 
             fullScreenGrab.Left = screenCenterPoint.X - (sideLength / 2);
             fullScreenGrab.Top = screenCenterPoint.Y - (sideLength / 2);
@@ -133,11 +114,10 @@ public static partial class WindowUtilities
         }
     }
 
-    public static Point GetCenterPoint(this DisplayInfo screen)
+    public static Point GetCenterPoint(this Screen screen)
     {
-        Rect screenRect = screen.Bounds;
-        double x = screenRect.Left + (screenRect.Width / 2);
-        double y = screenRect.Top + (screenRect.Height / 2);
+        double x = screen.WpfBounds.Left + (screen.WpfBounds.Width / 2);
+        double y = screen.WpfBounds.Top + (screen.WpfBounds.Height / 2);
         return new(x, y);
     }
 
@@ -163,7 +143,6 @@ public static partial class WindowUtilities
     internal static async void CloseAllFullscreenGrabs()
     {
         WindowCollection allWindows = Application.Current.Windows;
-        ClearFullscreenPostGrabActionStates();
 
         bool isFromEditWindow = false;
         string stringFromOCR = "";
@@ -172,8 +151,8 @@ public static partial class WindowUtilities
         {
             if (window is FullscreenGrab fsg)
             {
-                if (!string.IsNullOrWhiteSpace(fsg.TextFromOCR))
-                    stringFromOCR = fsg.TextFromOCR;
+                if (!string.IsNullOrWhiteSpace(fsg.textFromOCR))
+                    stringFromOCR = fsg.textFromOCR;
 
                 if (fsg.DestinationTextBox is not null)
                 {
@@ -187,7 +166,7 @@ public static partial class WindowUtilities
             }
         }
 
-        if (AppUtilities.TextGrabSettings.TryInsert
+        if (Settings.Default.TryInsert
             && !string.IsNullOrWhiteSpace(stringFromOCR)
             && !isFromEditWindow)
         {
@@ -210,36 +189,11 @@ public static partial class WindowUtilities
                 fsg.KeyPressed(key, isActive);
     }
 
-    internal static void SyncFullscreenPostGrabActionStates(IReadOnlyDictionary<string, bool> actionStates, FullscreenGrab? sourceWindow = null)
-    {
-        fullscreenPostGrabActionStates = new Dictionary<string, bool>(actionStates);
-
-        WindowCollection allWindows = Application.Current.Windows;
-        foreach (Window window in allWindows)
-        {
-            if (window is FullscreenGrab fsg && fsg != sourceWindow)
-                fsg.ApplyPostGrabActionSnapshot(fullscreenPostGrabActionStates);
-        }
-    }
-
-    internal static IReadOnlyDictionary<string, bool>? GetFullscreenPostGrabActionStates()
-    {
-        if (fullscreenPostGrabActionStates is null || fullscreenPostGrabActionStates.Count == 0)
-            return null;
-
-        return new Dictionary<string, bool>(fullscreenPostGrabActionStates);
-    }
-
-    internal static void ClearFullscreenPostGrabActionStates()
-    {
-        fullscreenPostGrabActionStates = null;
-    }
-
     internal static async Task TryInsertString(string stringToInsert)
     {
-        await Task.Delay(TimeSpan.FromSeconds(AppUtilities.TextGrabSettings.InsertDelay));
+        await Task.Delay(TimeSpan.FromSeconds(Settings.Default.InsertDelay));
 
-        List<INPUT> inputs = [];
+        List<INPUT> inputs = new();
         // make sure keys are up.
         TryInjectModifierKeyUp(ref inputs, VirtualKeyShort.LCONTROL);
         TryInjectModifierKeyUp(ref inputs, VirtualKeyShort.RCONTROL);
@@ -249,37 +203,29 @@ public static partial class WindowUtilities
         TryInjectModifierKeyUp(ref inputs, VirtualKeyShort.RSHIFT);
 
         // send Ctrl+V (key downs and key ups)
-        INPUT ctrlDown = new()
-        {
-            Type = OSInterop.InputType.INPUT_KEYBOARD
-        };
+        INPUT ctrlDown = new();
+        ctrlDown.Type = OSInterop.InputType.INPUT_KEYBOARD;
         ctrlDown.U.Ki.WVk = VirtualKeyShort.CONTROL;
         inputs.Add(ctrlDown);
 
-        INPUT vDown = new()
-        {
-            Type = OSInterop.InputType.INPUT_KEYBOARD
-        };
+        INPUT vDown = new();
+        vDown.Type = OSInterop.InputType.INPUT_KEYBOARD;
         vDown.U.Ki.WVk = VirtualKeyShort.KEY_V;
         inputs.Add(vDown);
 
-        INPUT vUp = new()
-        {
-            Type = OSInterop.InputType.INPUT_KEYBOARD
-        };
+        INPUT vUp = new();
+        vUp.Type = OSInterop.InputType.INPUT_KEYBOARD;
         vUp.U.Ki.WVk = VirtualKeyShort.KEY_V;
         vUp.U.Ki.DwFlags = KEYEVENTF.KEYUP;
         inputs.Add(vUp);
 
-        INPUT ctrlUp = new()
-        {
-            Type = OSInterop.InputType.INPUT_KEYBOARD
-        };
+        INPUT ctrlUp = new();
+        ctrlUp.Type = OSInterop.InputType.INPUT_KEYBOARD;
         ctrlUp.U.Ki.WVk = VirtualKeyShort.CONTROL;
         ctrlUp.U.Ki.DwFlags = KEYEVENTF.KEYUP;
         inputs.Add(ctrlUp);
 
-        _ = SendInput((uint)inputs.Count, [.. inputs], INPUT.Size);
+        _ = SendInput((uint)inputs.Count, inputs.ToArray(), INPUT.Size);
         await Task.CompletedTask;
     }
 
@@ -288,7 +234,7 @@ public static partial class WindowUtilities
         // Most significant bit is set if key is down
         if ((GetAsyncKeyState((int)modifier) & 0x8000) != 0)
         {
-            INPUT inputEvent = default;
+            var inputEvent = default(INPUT);
             inputEvent.Type = OSInterop.InputType.INPUT_KEYBOARD;
             inputEvent.U.Ki.WVk = modifier;
             inputEvent.U.Ki.DwFlags = KEYEVENTF.KEYUP;
@@ -296,50 +242,11 @@ public static partial class WindowUtilities
         }
     }
 
-    internal static bool ShouldOpenNewEtwInSpreadsheetMode(bool isTableModeSelected, bool hasExistingEditTextWindow)
-    {
-        return isTableModeSelected && !hasExistingEditTextWindow;
-    }
-
-    internal static EditTextWindow OpenOrActivateEditTextWindow(bool isTableModeSelected = false)
-    {
-        WindowCollection allWindows = Application.Current.Windows;
-
-        foreach (Window window in allWindows)
-        {
-            if (window is EditTextWindow matchWindow)
-            {
-                matchWindow.Activate();
-                return matchWindow;
-            }
-        }
-
-        EditTextWindow newWindow = new();
-        if (ShouldOpenNewEtwInSpreadsheetMode(isTableModeSelected, hasExistingEditTextWindow: false))
-            newWindow.EnterSpreadsheetMode();
-
-        try
-        {
-            newWindow.Show();
-        }
-        catch (Exception ex)
-        {
-            _ = new Wpf.Ui.Controls.MessageBox
-            {
-                Title = ex.Message,
-                Content = "An error occurred while trying to open a new window. Please try again.",
-                CloseButtonText = "OK"
-            }.ShowDialogAsync();
-        }
-
-        return newWindow;
-    }
-
     internal static T OpenOrActivateWindow<T>() where T : Window, new()
     {
         WindowCollection allWindows = Application.Current.Windows;
 
-        foreach (Window window in allWindows)
+        foreach (var window in allWindows)
         {
             if (window is T matchWindow)
             {
@@ -350,20 +257,7 @@ public static partial class WindowUtilities
 
         // No Window Found, open a new one
         T newWindow = new();
-
-        try
-        {
-            newWindow.Show();
-        }
-        catch (Exception ex)
-        {
-            _ = new Wpf.Ui.Controls.MessageBox
-            {
-                Title = ex.Message,
-                Content = "An error occurred while trying to open a new window. Please try again.",
-                CloseButtonText = "OK"
-            }.ShowDialogAsync();
-        }
+        newWindow.Show();
         return newWindow;
     }
 
@@ -373,17 +267,12 @@ public static partial class WindowUtilities
 
         bool shouldShutDown = false;
 
-        if (AppUtilities.TextGrabSettings.RunInTheBackground)
+        if (Settings.Default.RunInTheBackground)
         {
             if (App.Current is App app)
             {
                 if (app.NumberOfRunningInstances > 1
                     && app.TextGrabIcon == null
-                    && zeroOpenWindows)
-                    shouldShutDown = true;
-
-                if (app.TextGrabIcon is not null
-                    && app.TextGrabIcon.Icon is null
                     && zeroOpenWindows)
                     shouldShutDown = true;
             }
@@ -392,56 +281,6 @@ public static partial class WindowUtilities
             shouldShutDown = true;
 
         if (shouldShutDown)
-        {
-            // Let any queued/in-flight speech finish before exiting. RunWhenIdle
-            // runs the callback immediately when idle, or once the queue drains;
-            // registration is atomic with the idle check so shutdown can't be
-            // missed if speech finishes right as we ask.
-            Singleton<TtsService>.Instance.RunWhenIdle(
-                () => Application.Current.Dispatcher.Invoke(Application.Current.Shutdown));
-        }
+            Application.Current.Shutdown();
     }
-
-    public static bool GetMousePosition(out Point mousePosition)
-    {
-        if (GetCursorPos(out POINT point))
-        {
-            mousePosition = new Point(point.X, point.Y);
-            return true;
-        }
-        mousePosition = default;
-        return false;
-    }
-
-    public static bool IsMouseInWindow(this Window window)
-    {
-        GetMousePosition(out Point mousePosition);
-
-        DpiScale dpi = System.Windows.Media.VisualTreeHelper.GetDpi(window);
-        Point absPosPoint = window.GetAbsolutePosition();
-        Rect windowRect = new(absPosPoint.X, absPosPoint.Y,
-            window.ActualWidth * dpi.DpiScaleX,
-            window.ActualHeight * dpi.DpiScaleY);
-        return windowRect.Contains(mousePosition);
-    }
-
-    public static ScrollViewer? GetScrollViewer(DependencyObject obj)
-    {
-        if (obj is ScrollViewer sv) return sv;
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
-        {
-            DependencyObject child = VisualTreeHelper.GetChild(obj, i);
-            ScrollViewer? result = GetScrollViewer(child);
-            if (result != null) return result;
-        }
-        return null;
-    }
-
-    #region DLLImport
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetCursorPos(out POINT lpPoint);
-
-    #endregion
 }

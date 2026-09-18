@@ -41,14 +41,14 @@ public class ShortcutKeySet : IEquatable<ShortcutKeySet>
         if (!shortcutsAsString.Contains('-'))
             return;
 
-        string[] enabledSplitKeys = shortcutsAsString.Split('-');
+        var enabledSplitKeys = shortcutsAsString.Split('-');
 
         bool parsedEnabledSuccessfully = bool.TryParse(enabledSplitKeys[0], out bool parsedEnabled);
 
         if (!parsedEnabledSuccessfully || enabledSplitKeys.Length < 2)
             return;
 
-        string[] splitUpString = enabledSplitKeys[1].Split('+');
+        var splitUpString = enabledSplitKeys[1].Split('+');
         string? keyString = splitUpString.LastOrDefault();
 
         if (Enum.TryParse(keyString, out Key parsedKey))
@@ -175,14 +175,6 @@ public class ShortcutKeySet : IEquatable<ShortcutKeySet>
             Name = "Edit last Grab Frame",
             Action = ShortcutKeyActions.PreviousGrabFrame
         },
-        new()
-        {
-            Modifiers = {KeyModifiers.Windows, KeyModifiers.Shift, KeyModifiers.Control},
-            NonModifierKey = Key.V,
-            IsEnabled = true,
-            Name = "Open Clipboard Content",
-            Action = ShortcutKeyActions.OpenClipboardContent
-        },
     };
 }
 
@@ -197,5 +189,4 @@ public enum ShortcutKeyActions
     PreviousRegionGrab = 6,
     PreviousEditWindow = 7,
     PreviousGrabFrame = 8,
-    OpenClipboardContent = 9,
 }

@@ -1,8 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Windows.Input;
 using Text_Grab.Models;
+using Text_Grab.Properties;
 
 namespace Text_Grab.Utilities;
 
@@ -10,32 +12,48 @@ internal class ShortcutKeysUtilities
 {
     public static void SaveShortcutKeySetSettings(IEnumerable<ShortcutKeySet> shortcutKeySets)
     {
-        AppUtilities.TextGrabSettingsService.SaveShortcutKeySets(shortcutKeySets);
+        string json = JsonSerializer.Serialize(shortcutKeySets);
+
+        // save the json string to the settings
+        Settings.Default.ShortcutKeySets = json;
+
+        // save the settings
+        Settings.Default.Save();
     }
 
     public static IEnumerable<ShortcutKeySet> GetShortcutKeySetsFromSettings()
     {
-        List<ShortcutKeySet> defaultKeys = ShortcutKeySet.DefaultShortcutKeySets;
-        List<ShortcutKeySet> shortcutKeySets = AppUtilities.TextGrabSettingsService.LoadShortcutKeySets();
+        string json = Settings.Default.ShortcutKeySets;
 
-        if (shortcutKeySets.Count == 0)
+        List<ShortcutKeySet> defaultKeys = ShortcutKeySet.DefaultShortcutKeySets;
+
+        if (string.IsNullOrWhiteSpace(json))
             return ParseFromPreviousAndDefaultsSettings();
 
+        // create a list of custom bottom bar items
+        List<ShortcutKeySet>? shortcutKeySets = new();
+
+        // deserialize the json string into a list of custom bottom bar items
+        shortcutKeySets = JsonSerializer.Deserialize<List<ShortcutKeySet>>(json);
+
         // return the list of custom bottom bar items
-        List<ShortcutKeyActions> actionsList = shortcutKeySets.Select(x => x.Action).ToList();
+        if (shortcutKeySets is null || shortcutKeySets.Count == 0)
+            return defaultKeys;
+
+        var actionsList = shortcutKeySets.Select(x => x.Action).ToList();
         return shortcutKeySets.Concat(defaultKeys.Where(x => !actionsList.Contains(x.Action)).ToList()).ToList();
     }
 
     public static IEnumerable<ShortcutKeySet> ParseFromPreviousAndDefaultsSettings()
     {
-        string fsgKey = AppUtilities.TextGrabSettings.FullscreenGrabHotKey;
+        string fsgKey = Settings.Default.FullscreenGrabHotKey;
 
         if (string.IsNullOrWhiteSpace(fsgKey))
             return ShortcutKeySet.DefaultShortcutKeySets;
 
-        string gfKey = AppUtilities.TextGrabSettings.GrabFrameHotkey;
-        string etwKey = AppUtilities.TextGrabSettings.EditWindowHotKey;
-        string qslKey = AppUtilities.TextGrabSettings.LookupHotKey;
+        string gfKey = Settings.Default.GrabFrameHotkey;
+        string etwKey = Settings.Default.EditWindowHotKey;
+        string qslKey = Settings.Default.LookupHotKey;
 
         List<ShortcutKeySet> priorAndDefaultSettings = new();
 

@@ -1,85 +1,65 @@
+using System;
 using System.Collections.Generic;
-using Text_Grab.Interfaces;
-using Text_Grab.Models;
-using Text_Grab.Services;
+using System.Linq;
+using System.Windows.Input;
+using Text_Grab.Properties;
+using Windows.Globalization;
+using Windows.Media.Ocr;
 
 namespace Text_Grab.Utilities;
 
-/// <summary>
-/// Static utility class for language operations. 
-/// Delegates to LanguageService singleton for cached operations to reduce memory allocations.
-/// </summary>
 public static class LanguageUtilities
 {
-    /// <summary>
-    /// Gets the current input language from the cached service.
-    /// </summary>
-    public static ILanguage GetCurrentInputLanguage()
-        => Singleton<LanguageService>.Instance.GetCurrentInputLanguage();
+    public static Language GetCurrentInputLanguage()
+    {
+        // use currently selected Language
+        string inputLang = InputLanguageManager.Current.CurrentInputLanguage.Name;
+        return new(inputLang);
+    }
 
-    /// <summary>
-    /// Gets all available OCR languages from the cached service.
-    /// </summary>
-    public static IList<ILanguage> GetAllLanguages()
-        => Singleton<LanguageService>.Instance.GetAllLanguages();
+    public static Language GetOCRLanguage()
+    {
+        Language selectedLanguage = GetCurrentInputLanguage();
 
-    /// <summary>
-    /// Gets the language tag from a language object.
-    /// </summary>
-    public static string GetLanguageTag(object language)
-        => LanguageService.GetLanguageTag(language);
+        if (!string.IsNullOrEmpty(Settings.Default.LastUsedLang))
+        {
+            try
+            {
+                selectedLanguage = new(Settings.Default.LastUsedLang);
+            }
+            catch
+            {
+                selectedLanguage = GetCurrentInputLanguage();
+            }
+        }
 
-    /// <summary>
-    /// Gets the language kind from a language object.
-    /// </summary>
-    public static LanguageKind GetLanguageKind(object language)
-        => LanguageService.GetLanguageKind(language);
+        List<Language> possibleOCRLanguages = OcrEngine.AvailableRecognizerLanguages.ToList();
 
-    /// <summary>
-    /// Gets the OCR language to use based on settings and available languages.
-    /// Uses cached values when settings haven't changed.
-    /// </summary>
-    public static ILanguage GetOCRLanguage()
-        => Singleton<LanguageService>.Instance.GetOCRLanguage();
+        if (possibleOCRLanguages.Count == 0)
+        {
+            System.Windows.MessageBox.Show("No possible OCR languages are installed.", "Text Grab");
+            throw new Exception("No possible OCR languages are installed");
+        }
 
-    public static (string LanguageTag, LanguageKind LanguageKind, bool UsedUiAutomation) GetPersistedLanguageIdentity(object language)
-        => LanguageService.GetPersistedLanguageIdentity(language);
+        // If the selected input language or last used language is not a possible OCR Language
+        // then we need to find a similar language to use
+        if (possibleOCRLanguages.All(l => l.LanguageTag != selectedLanguage.LanguageTag))
+        {
+            List<Language> similarLanguages = possibleOCRLanguages.Where(
+                la => la.AbbreviatedName == selectedLanguage.AbbreviatedName).ToList();
 
-    public static (string LanguageTag, LanguageKind LanguageKind, bool UsedUiAutomation) NormalizePersistedLanguageIdentity(
-        LanguageKind languageKind,
-        string languageTag,
-        bool usedUiAutomation = false)
-        => LanguageService.NormalizePersistedLanguageIdentity(languageKind, languageTag, usedUiAutomation);
+            if (similarLanguages is not null && similarLanguages.Count > 0)
+                selectedLanguage = similarLanguages.First();
+            else
+                selectedLanguage = possibleOCRLanguages.First();
+        }
 
-    /// <summary>
-    /// Checks if the current input language is Latin-based.
-    /// </summary>
+        return selectedLanguage;
+    }
+
     public static bool IsCurrentLanguageLatinBased()
-        => Singleton<LanguageService>.Instance.IsCurrentLanguageLatinBased();
-
-    /// <summary>
-    /// Gets the system language name suitable for Windows AI translation.
-    /// Returns a user-friendly language name like "English", "Spanish", etc.
-    /// </summary>
-    /// <returns>Language name for translation, defaults to "English" if unable to determine</returns>
-    public static string GetSystemLanguageForTranslation()
-        => Singleton<LanguageService>.Instance.GetSystemLanguageForTranslation();
-
-    /// <summary>
-    /// Invalidates the cached languages list. Call this when new languages are installed.
-    /// </summary>
-    public static void InvalidateLanguagesCache()
-        => Singleton<LanguageService>.Instance.InvalidateLanguagesCache();
-
-    /// <summary>
-    /// Invalidates the OCR language cache. Call this when LastUsedLang setting changes.
-    /// </summary>
-    public static void InvalidateOcrLanguageCache()
-        => Singleton<LanguageService>.Instance.InvalidateOcrLanguageCache();
-
-    /// <summary>
-    /// Invalidates all caches. Call this when input language changes.
-    /// </summary>
-    public static void InvalidateAllCaches()
-        => Singleton<LanguageService>.Instance.InvalidateAllCaches();
+    {
+        Language lang = GetCurrentInputLanguage();
+        return lang.IsLatinBased();
+    }
 }

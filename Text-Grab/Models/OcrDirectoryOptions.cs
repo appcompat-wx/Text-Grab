@@ -8,5 +8,4 @@ public record OcrDirectoryOptions
     public bool OutputFileNames { get; set; } = true;
     public bool OutputFooter { get; set; } = true;
     public bool OutputHeader { get; set; } = true;
-    public GrabTemplate? GrabTemplate { get; set; } = null;
 }

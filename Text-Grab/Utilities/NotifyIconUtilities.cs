@@ -1,13 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.IO;
+using System.Drawing;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media.Imaging;
-using Text_Grab.Controls;
+using System.Windows.Forms;
 using Text_Grab.Models;
+using Text_Grab.Properties;
 using Text_Grab.Services;
 using Text_Grab.Views;
 
@@ -17,52 +14,72 @@ public static class NotifyIconUtilities
 {
     public static void SetupNotifyIcon()
     {
-        if (AutomationProfile.Current is { AllowsSystemIntegration: false })
-            return;
-
         App app = (App)App.Current;
         if (app.TextGrabIcon is not null
             || app.NumberOfRunningInstances > 1)
         {
             return;
         }
+
+        NotifyIcon icon = new();
+        icon.Text = "Text Grab";
+        icon.Icon = new Icon(System.Windows.Application.GetResourceStream(new Uri("/TealSelect.ico", UriKind.Relative)).Stream);
+        icon.Visible = true;
+
+        ContextMenuStrip? contextMenu = new();
+
+        ToolStripMenuItem? settingsItem = new("&Settings");
+        settingsItem.Click += (s, e) => { SettingsWindow sw = new(); sw.Show(); };
+        ToolStripMenuItem? editLastItem = new("&Edit Last Grab");
+        editLastItem.Click += (s, e) => { Singleton<HistoryService>.Instance.GetLastHistoryAsGrabFrame(); };
+        ToolStripMenuItem? quickSimpleLookupItem = new("&Quick Simple Lookup");
+        quickSimpleLookupItem.Click += (s, e) => { QuickSimpleLookup qsl = new(); qsl.Show(); };
+        ToolStripMenuItem? previousGrabRegion = new("&Grab Previous Region");
+        previousGrabRegion.Click += async (s, e) => { await OcrUtilities.GetTextFromPreviousFullscreenRegion(); };
+        ToolStripMenuItem? fullScreenGrabItem = new("&Fullscreen Grab");
+        fullScreenGrabItem.Click += (s, e) => { WindowUtilities.LaunchFullScreenGrab(); };
+        ToolStripMenuItem? grabFrameItem = new("&Grab Frame");
+        grabFrameItem.Click += (s, e) => { GrabFrame gf = new(); gf.Show(); };
+        ToolStripMenuItem? editTextWindowItem = new("&Edit Text Window");
+        editTextWindowItem.Click += (s, e) => { EditTextWindow etw = new(); etw.Show(); };
+
+        ToolStripMenuItem? exitItem = new("&Close");
+        exitItem.Click += (s, e) => { System.Windows.Application.Current.Shutdown(); };
+
+        contextMenu.Items.AddRange(
+            new ToolStripMenuItem[] {
+                fullScreenGrabItem,
+                previousGrabRegion,
+                grabFrameItem,
+                editTextWindowItem,
+                quickSimpleLookupItem,
+                editLastItem,
+                settingsItem,
+                exitItem
+            }
+        );
+        icon.ContextMenuStrip = contextMenu;
+
+        icon.MouseClick += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+                App.DefaultLaunch();
+        };
+
+        icon.Disposed += trayIcon_Disposed;
+
         RegisterHotKeys(app);
 
-        app.TextGrabIcon = CreateNotifyIconWindow();
-    }
-
-    public static async Task ResetNotifyIcon()
-    {
-        App app = (App)App.Current;
-        app.TextGrabIcon = null;
-
-        UnregisterHotkeys(app);
-
-        NotifyIconWindow? existingIcon = GetExistingNotifyIconWindow();
-        existingIcon?.Close();
-
-        RegisterHotKeys(app);
-
-        app.TextGrabIcon = CreateNotifyIconWindow();
+        app.TextGrabIcon = icon;
     }
 
     public static void RegisterHotKeys(App app)
     {
-        if (AutomationProfile.Current is { AllowsSystemIntegration: false })
-            return;
-
         IEnumerable<ShortcutKeySet> shortcuts = ShortcutKeysUtilities.GetShortcutKeySetsFromSettings();
 
         foreach (ShortcutKeySet keySet in shortcuts)
-        {
-            if (!keySet.IsEnabled)
-                continue;
-
-            if (HotKeyManager.RegisterHotKey(keySet) is int id)
+            if (keySet.IsEnabled && HotKeyManager.RegisterHotKey(keySet) is int id)
                 app.HotKeyIds.Add(id);
-            else
-                AutomationDiagnostics.Record("hotkey-registration-failed", new { keySet.Action, keySet.Name, keySet.NonModifierKey, keySet.Modifiers });
-        }
 
         HotKeyManager.HotKeyPressed -= new EventHandler<HotKeyEventArgs>(HotKeyManager_HotKeyPressed);
         HotKeyManager.HotKeyPressed += new EventHandler<HotKeyEventArgs>(HotKeyManager_HotKeyPressed);
@@ -83,9 +100,9 @@ public static class NotifyIconUtilities
         UnregisterHotkeys(app);
     }
 
-    private static void HotKeyManager_HotKeyPressed(object? sender, HotKeyEventArgs e)
+    static void HotKeyManager_HotKeyPressed(object? sender, HotKeyEventArgs e)
     {
-        if (!AppUtilities.TextGrabSettings.GlobalHotkeysEnabled)
+        if (!Settings.Default.GlobalHotkeysEnabled)
             return;
 
         IEnumerable<ShortcutKeySet> shortcuts = ShortcutKeysUtilities.GetShortcutKeySetsFromSettings();
@@ -138,17 +155,10 @@ public static class NotifyIconUtilities
             case ShortcutKeyActions.PreviousEditWindow:
                 System.Windows.Application.Current.Dispatcher.Invoke(new Action(() =>
                 {
-                    HistoryInfo? historyInfo = Singleton<HistoryService>.Instance.GetEditWindows().LastOrDefault();
-
-                    if (historyInfo is null)
-                    {
-                        EditTextWindow etw = new();
-                        etw.Show();
-                        return;
-                    }
-
-                    EditTextWindow etwHistory = new(historyInfo);
-                    etwHistory.Show();
+                    EditTextWindow etw = new();
+                    etw.OpenMostRecentTextHistoryItem();
+                    etw.Show();
+                    etw.Activate();
                 }));
                 break;
             case ShortcutKeyActions.PreviousGrabFrame:
@@ -157,83 +167,8 @@ public static class NotifyIconUtilities
                     Singleton<HistoryService>.Instance.GetLastHistoryAsGrabFrame();
                 }));
                 break;
-            case ShortcutKeyActions.OpenClipboardContent:
-                System.Windows.Application.Current.Dispatcher.Invoke(new Action(() =>
-                {
-                    if (System.Windows.Clipboard.ContainsText())
-                    {
-                        string text = System.Windows.Clipboard.GetText();
-                        EditTextWindow etw = new(text, false);
-                        etw.Show();
-                        etw.Activate();
-                        return;
-                    }
-
-                    if (System.Windows.Clipboard.ContainsFileDropList())
-                    {
-                        StringCollection files = System.Windows.Clipboard.GetFileDropList();
-                        string? imagePath = files.Cast<string?>().FirstOrDefault(f => f is not null && IoUtilities.IsImageFile(f!));
-                        if (imagePath is not null)
-                        {
-                            GrabFrame gf = new(imagePath);
-                            gf.Show();
-                            gf.Activate();
-                            return;
-                        }
-                    }
-
-                    (bool success, System.Windows.Media.ImageSource? clipboardImage) = ClipboardUtilities.TryGetImageFromClipboard();
-                    if (!success || clipboardImage is null)
-                        return;
-
-                    BitmapSource? bitmapSource = null;
-                    if (clipboardImage is System.Windows.Interop.InteropBitmap interopBitmap)
-                    {
-                        System.Drawing.Bitmap bmp = ImageMethods.InteropBitmapToBitmap(interopBitmap);
-                        bitmapSource = ImageMethods.BitmapToImageSource(bmp);
-                        bmp.Dispose();
-                    }
-                    else if (clipboardImage is BitmapSource source)
-                    {
-                        bitmapSource = source;
-                    }
-
-                    if (bitmapSource is null)
-                        return;
-
-                    string tempPath = Path.Combine(AutomationProfile.GetTemporaryDirectory(), $"TextGrab_Clipboard_{Guid.NewGuid()}.png");
-                    using (FileStream fileStream = new(tempPath, FileMode.Create))
-                    {
-                        PngBitmapEncoder encoder = new();
-                        encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
-                        encoder.Save(fileStream);
-                    }
-
-                    GrabFrame grabFrame = new(tempPath);
-                    grabFrame.Show();
-                    grabFrame.Activate();
-                }));
-                break;
             default:
                 break;
         }
-    }
-
-    private static NotifyIconWindow CreateNotifyIconWindow()
-    {
-        NotifyIconWindow? existingIcon = GetExistingNotifyIconWindow();
-
-        if (existingIcon is not null)
-            return existingIcon;
-
-        NotifyIconWindow notifyIconWindow = new();
-        notifyIconWindow.Show();
-
-        return notifyIconWindow;
-    }
-
-    private static NotifyIconWindow? GetExistingNotifyIconWindow()
-    {
-        return Application.Current.Windows.OfType<NotifyIconWindow>().FirstOrDefault();
     }
 }

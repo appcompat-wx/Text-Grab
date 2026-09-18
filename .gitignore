@@ -56,7 +56,6 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
-UiTests/artifacts/
 
 # StyleCop
 StyleCopReport.xml
@@ -340,6 +339,3 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
-
-# Mono registry files
-.mono/

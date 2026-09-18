@@ -8,7 +8,6 @@ using System.Windows.Media.Imaging;
 using Text_Grab.Extensions;
 using Text_Grab.Services;
 using Text_Grab.Utilities;
-using Text_Grab.Utilities.Hdr;
 using Text_Grab.Views;
 using Windows.Storage.Streams;
 using BitmapEncoder = System.Windows.Media.Imaging.BitmapEncoder;
@@ -72,55 +71,15 @@ public static class ImageMethods
         return bitmapImage;
     }
 
-    public static BitmapImage CachedBitmapToBitmapImage(System.Windows.Media.Imaging.CachedBitmap cachedBitmap)
+    public static Bitmap GetRegionOfScreenAsBitmap(Rectangle region)
     {
-        BitmapImage bitmapImage = new();
-        using (MemoryStream memoryStream = new())
-        {
-            BitmapEncoder encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(cachedBitmap));
-            encoder.Save(memoryStream);
-            memoryStream.Position = 0;
-
-            bitmapImage.BeginInit();
-            bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-            bitmapImage.StreamSource = memoryStream;
-            bitmapImage.EndInit();
-            bitmapImage.Freeze();
-        }
-        return bitmapImage;
-    }
-
-    /// <summary>
-    /// Captures a virtual-desktop region to a bitmap. When the region lives on an HDR display
-    /// and HDR correction is enabled, this uses Windows.Graphics.Capture to grab the frame at
-    /// full precision and tone-map it back to SDR so the result isn't washed out (issue #111).
-    /// Falls back to a plain GDI screen copy otherwise or if HDR capture fails.
-    /// </summary>
-    private static Bitmap CaptureScreenRegion(Rectangle region)
-    {
-        if (AppUtilities.TextGrabSettings.HdrCaptureCorrection)
-        {
-            Bitmap? hdrBitmap = HdrScreenCapture.TryCaptureRegion(region);
-            if (hdrBitmap is not null)
-                return hdrBitmap;
-        }
-
         Bitmap bmp = new(region.Width, region.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using Graphics g = Graphics.FromImage(bmp);
 
         g.CopyFromScreen(region.Left, region.Top, 0, 0, bmp.Size, CopyPixelOperation.SourceCopy);
-        return bmp;
-    }
-
-    public static Bitmap GetRegionOfScreenAsBitmap(Rectangle region, bool cacheResult = true)
-    {
-        Bitmap bmp = CaptureScreenRegion(region);
         bmp = PadImage(bmp);
 
-        if (cacheResult)
-            Singleton<HistoryService>.Instance.CacheLastBitmap(bmp);
-
+        Singleton<HistoryService>.Instance.CacheLastBitmap(bmp);
         return bmp;
     }
 
@@ -132,45 +91,33 @@ public static class ImageMethods
 
         Point absPosPoint = passedWindow.GetAbsolutePosition();
 
-        int thisCorrectedLeft = (int)absPosPoint.X;
-        int thisCorrectedTop = (int)absPosPoint.Y;
+        int thisCorrectedLeft = (int)(absPosPoint.X);
+        int thisCorrectedTop = (int)(absPosPoint.Y);
 
         if (passedWindow is GrabFrame grabFrame)
         {
             Rect imageRect = grabFrame.GetImageContentRect();
 
-            if (imageRect == Rect.Empty)
-            {
-                // Ask WPF's layout engine for the exact physical-pixel bounds of the
-                // transparent content area. This is always correct regardless of DPI,
-                // border thickness, or title/bottom bar heights.
-                Rectangle contentRect = grabFrame.GetContentAreaScreenRect();
-                if (contentRect == Rectangle.Empty)
-                    return new Bitmap(1, 1);
-                thisCorrectedLeft = contentRect.X;
-                thisCorrectedTop = contentRect.Y;
-                windowWidth = contentRect.Width;
-                windowHeight = contentRect.Height;
-            }
-            else
-            {
-                thisCorrectedLeft = (int)imageRect.Left;
-                thisCorrectedTop = (int)imageRect.Top;
-                windowWidth = (int)imageRect.Width;
-                windowHeight = (int)imageRect.Height;
-            }
+            int borderThickness = 2;
+            int titleBarHeight = 32;
+            int bottomBarHeight = 42;
+            thisCorrectedLeft = (int)((absPosPoint.X + borderThickness) * dpi.DpiScaleX);
+            thisCorrectedTop = (int)((absPosPoint.Y + (titleBarHeight + borderThickness)) * dpi.DpiScaleY);
+            windowWidth -= (int)((2 * borderThickness) * dpi.DpiScaleX);
+            windowHeight -= (int)((titleBarHeight + bottomBarHeight + (2 * borderThickness)) * dpi.DpiScaleY);
         }
 
-        Rectangle windowRegion = new(thisCorrectedLeft, thisCorrectedTop, windowWidth, windowHeight);
-        return CaptureScreenRegion(windowRegion);
+        Bitmap bmp = new(windowWidth, windowHeight, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using Graphics g = Graphics.FromImage(bmp);
+
+        g.CopyFromScreen(thisCorrectedLeft, thisCorrectedTop, 0, 0, bmp.Size, CopyPixelOperation.SourceCopy);
+        return bmp;
     }
 
     public static ImageSource GetWindowBoundsImage(Window passedWindow)
     {
         Bitmap bmp = GetWindowsBoundsBitmap(passedWindow);
-        ImageSource imageSource = BitmapToImageSource(bmp);
-        bmp.Dispose();
-        return imageSource;
+        return BitmapToImageSource(bmp);
     }
 
     public static Bitmap ScaleBitmapUniform(Bitmap passedBitmap, double scale)
@@ -237,23 +184,10 @@ public static class ImageMethods
         return bmp;
     }
 
-    public static Bitmap? ImageSourceToBitmap(ImageSource? source)
-    {
-        return source switch
-        {
-            BitmapSource bitmapSource => BitmapSourceToBitmap(bitmapSource),
-            _ => null
-        };
-    }
-
     public static Bitmap GetBitmapFromIRandomAccessStream(IRandomAccessStream stream)
     {
-        Stream managedStream = stream.AsStream();
-        if (managedStream.CanSeek)
-            managedStream.Position = 0;
-
-        using Bitmap bitmap = new(managedStream);
-        return new Bitmap(bitmap);
+        Bitmap bitmap = new(stream.AsStream());
+        return bitmap;
     }
 
     public static BitmapImage GetBitmapImageFromIRandomAccessStream(IRandomAccessStream stream)

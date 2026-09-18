@@ -33,7 +33,6 @@ public enum OpenContentKind
     Image = 0,
     TextFile = 1,
     Directory = 2,
-    PdfDocument = 3,
 }
 
 public enum OcrEngineKind
@@ -77,64 +76,4 @@ public enum VirtualKeyCodes : short
     LeftButton = 0x01,
     RightButton = 0x02,
     MiddleButton = 0x04
-}
-
-public enum ScrollBehavior
-{
-    None = 0,
-    Resize = 1,
-    Zoom = 2,
-    ZoomWhenFrozen = 3,
-}
-
-public enum GrabFrameBorderStyle
-{
-    // Follow the app light/dark theme (current behavior).
-    Theme = 0,
-    // Two-tone white+black border; one tone always contrasts with any background.
-    HighContrast = 1,
-    // A fixed user-picked color.
-    Color = 2,
-}
-
-public enum SpellCheckMode
-{
-    // Enable spell check unless the text looks like it would choke the checker
-    // (very long documents or several long unspaced tokens).
-    Auto = 0,
-    // Always show spell check, regardless of content.
-    AlwaysOn = 1,
-    // Never show spell check.
-    Off = 2,
-}
-
-public enum LanguageKind
-{
-    Global = 0,
-    Tesseract = 1,
-    WindowsAi = 2,
-    UiAutomation = 3,
-    WindowsAiDescription = 4,
-}
-
-public enum UiAutomationTraversalMode
-{
-    Fast = 0,
-    Balanced = 1,
-    Thorough = 2,
-}
-
-public enum FsgDefaultMode
-{
-    Default = 0,
-    SingleLine = 1,
-    Table = 2,
-}
-
-public enum FsgSelectionStyle
-{
-    Region = 0,
-    Window = 1,
-    Freeform = 2,
-    AdjustAfter = 3,
 }

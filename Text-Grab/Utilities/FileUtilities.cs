@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Windows.Media.Streaming.Adaptive;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
@@ -13,12 +13,11 @@ namespace Text_Grab.Utilities;
 
 public class FileUtilities
 {
+    #region Public Methods
+
     public static Task<Bitmap?> GetImageFileAsync(string fileName, FileStorageKind storageKind)
     {
-        if (AutomationProfile.Current is not null)
-            return GetImageFileUnpackaged(fileName, storageKind);
-
-        if (AppUtilities.IsPackaged() && AutomationProfile.Current is null)
+        if (ImplementAppOptions.IsPackaged())
             return GetImageFilePackaged(fileName, storageKind);
 
         return GetImageFileUnpackaged(fileName, storageKind);
@@ -35,66 +34,48 @@ public class FileUtilities
     /// Modified by Joseph Finney
     public static string GetImageFilter()
     {
-        string imageExtensions = GetImageExtensionsFilterPattern();
-        return string.IsNullOrEmpty(imageExtensions) ? string.Empty : $"Image files|{imageExtensions}";
-    }
-
-    public static string GetVisualDocumentFilter()
-    {
-        string pdfExtensions = GetExtensionsFilterPattern(IoUtilities.PdfExtensions);
-        string combinedExtensions = GetVisualDocumentFilterPattern();
-        string imageFilter = GetImageFilter();
-
-        return string.Join("|", new[]
+        string imageExtensions = string.Empty;
+        string separator = "";
+        ImageCodecInfo[] codecs = ImageCodecInfo.GetImageEncoders();
+        Dictionary<string, string> imageFilters = new Dictionary<string, string>();
+        foreach (ImageCodecInfo codec in codecs)
         {
-            $"Image and PDF files|{combinedExtensions}",
-            $"PDF files|{pdfExtensions}",
-            imageFilter
-        });
-    }
+            if (codec.FilenameExtension is not string extension)
+                continue;
 
-    public static string GetOpenDocumentFilter()
-    {
-        string spreadsheetExtensions = GetExtensionsFilterPattern(IoUtilities.SpreadsheetExtensions);
-        string markdownExtensions = GetExtensionsFilterPattern(IoUtilities.MarkdownExtensions);
-        string grabFrameExtension = $"*{GrabFrameFileUtilities.GrabFrameFileExtension}";
-        string supportedExtensions = string.Join(";", new[]
+            imageExtensions = $"{imageExtensions}{separator}{extension.ToLower()}";
+            separator = ";";
+            imageFilters.Add($"{codec.FormatDescription} files ({extension.ToLower()})", extension.ToLower());
+        }
+        string result = string.Empty;
+        separator = "";
+        //foreach (KeyValuePair<string, string> filter in imageFilters)
+        //{
+        //    result += $"{separator}{filter.Key}|{filter.Value}";
+        //    separator = "|";
+        //}
+        if (!string.IsNullOrEmpty(imageExtensions))
         {
-            GetVisualDocumentFilterPattern(),
-            grabFrameExtension,
-            spreadsheetExtensions,
-            markdownExtensions,
-            "*.txt"
-        }.Where(pattern => !string.IsNullOrWhiteSpace(pattern)));
-
-        return string.Join("|", new[]
-        {
-            $"Supported documents|{supportedExtensions}",
-            GetVisualDocumentFilter(),
-            GrabFrameFileUtilities.GetGrabFrameFileFilter(),
-            $"Spreadsheet documents|{spreadsheetExtensions}",
-            $"Markdown documents|{markdownExtensions}",
-            "Text documents (*.txt)|*.txt",
-            "All files (*.*)|*.*"
-        });
+            result += $"{separator}Image files|{imageExtensions}";
+        }
+        return result;
     }
 
     public static string GetPathToLocalFile(string imageRelativePath)
     {
-        string? executableDirectory = Path.GetDirectoryName(GetExePath());
+        Uri codeBaseUrl = new(System.AppDomain.CurrentDomain.BaseDirectory);
+        string codeBasePath = Uri.UnescapeDataString(codeBaseUrl.AbsolutePath);
+        string? dirPath = Path.GetDirectoryName(codeBasePath);
 
-        if (executableDirectory is null)
-            throw new NullReferenceException($"{nameof(executableDirectory)} cannot be null");
+        if (dirPath is null)
+            dirPath = "";
 
-        return Path.Combine(executableDirectory, imageRelativePath);
+        return Path.Combine(dirPath, imageRelativePath);
     }
 
-    public static async Task<string> GetPathToHistory()
+    public async static Task<string> GetPathToHistory()
     {
-        if (AutomationProfile.Current is AutomationProfile profile)
-            return profile.HistoryDirectory;
-
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
         {
             StorageFolder historyFolder = await GetStorageFolderPackaged("", FileStorageKind.WithHistory);
             return historyFolder.Path;
@@ -105,10 +86,7 @@ public class FileUtilities
 
     public static Task<string> GetTextFileAsync(string fileName, FileStorageKind storageKind)
     {
-        if (AutomationProfile.Current is not null)
-            return GetTextFileUnpackaged(fileName, storageKind);
-
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
             return GetTextFilePackaged(fileName, storageKind);
 
         return GetTextFileUnpackaged(fileName, storageKind);
@@ -116,10 +94,7 @@ public class FileUtilities
 
     public static Task<bool> SaveImageFile(Bitmap image, string filename, FileStorageKind storageKind)
     {
-        if (AutomationProfile.Current is not null)
-            return SaveImageFileUnpackaged(image, filename, storageKind);
-
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
             return SaveImagePackaged(image, filename, storageKind);
 
         return SaveImageFileUnpackaged(image, filename, storageKind);
@@ -127,50 +102,13 @@ public class FileUtilities
 
     public static Task<bool> SaveTextFile(string textContent, string filename, FileStorageKind storageKind)
     {
-        if (AutomationProfile.Current is not null)
-            return SaveTextFileUnpackaged(textContent, filename, storageKind);
-
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
             return SaveTextFilePackaged(textContent, filename, storageKind);
 
         return SaveTextFileUnpackaged(textContent, filename, storageKind);
     }
 
-    private static string GetImageExtensionsFilterPattern()
-    {
-        string imageExtensions = string.Empty;
-        string separator = string.Empty;
-        ImageCodecInfo[] codecs = ImageCodecInfo.GetImageEncoders();
-        Dictionary<string, string> imageFilters = [];
-
-        foreach (ImageCodecInfo codec in codecs)
-        {
-            if (codec.FilenameExtension is not string extension)
-                continue;
-
-            imageExtensions = $"{imageExtensions}{separator}{extension.ToLower()}";
-            separator = ";";
-            imageFilters.Add($"{codec.FormatDescription} files ({extension.ToLower()})", extension.ToLower());
-        }
-
-        return imageExtensions;
-    }
-
-    private static string GetExtensionsFilterPattern(IEnumerable<string> extensions)
-    {
-        return string.Join(";", extensions.Select(extension => $"*{extension}"));
-    }
-
-    private static string GetVisualDocumentFilterPattern()
-    {
-        return string.Join(";", new[]
-        {
-            GetImageExtensionsFilterPattern(),
-            GetExtensionsFilterPattern(IoUtilities.PdfExtensions)
-        }.Where(pattern => !string.IsNullOrWhiteSpace(pattern)));
-    }
-
-    private static async Task<Bitmap?> GetImageFilePackaged(string fileName, FileStorageKind storageKind)
+    private async static Task<Bitmap?> GetImageFilePackaged(string fileName, FileStorageKind storageKind)
     {
         StorageFolder folder = await GetStorageFolderPackaged(fileName, storageKind);
 
@@ -184,7 +122,7 @@ public class FileUtilities
             return null;
         }
     }
-
+    
 #pragma warning disable CS1998
     private static async Task<Bitmap?> GetImageFileUnpackaged(string fileName, FileStorageKind storageKind)
     {
@@ -196,7 +134,7 @@ public class FileUtilities
 
         return new Bitmap(filePath);
     }
-    private static async Task<string> GetTextFilePackaged(string fileName, FileStorageKind storageKind)
+    private async static Task<string> GetTextFilePackaged(string fileName, FileStorageKind storageKind)
     {
         try
         {
@@ -208,7 +146,7 @@ public class FileUtilities
             StorageFile file = await folder.GetFileAsync(fileName);
             using Stream stream = await file.OpenStreamForReadAsync();
             StreamReader streamReader = new(stream);
-            return await streamReader.ReadToEndAsync();
+            return streamReader.ReadToEnd();
         }
         catch
         {
@@ -226,6 +164,9 @@ public class FileUtilities
 
         return await File.ReadAllTextAsync(filePath);
     }
+    #endregion Public Methods
+
+    #region Private Methods
 
     private static void AddText(FileStream fs, string value)
     {
@@ -235,38 +176,22 @@ public class FileUtilities
 
     private static string GetFolderPathUnpackaged(string filename, FileStorageKind storageKind)
     {
-        if (AutomationProfile.Current is AutomationProfile profile)
-        {
-            return storageKind switch
-            {
-                FileStorageKind.WithExe => profile.DataDirectory,
-                FileStorageKind.WithHistory => profile.HistoryDirectory,
-                _ => filename
-            };
-        }
-
-        string defaultFallback = "c:\\Text-Grab";
-
-        string? executableDirectory = Path.GetDirectoryName(GetExePath());
-
-        if (string.IsNullOrEmpty(executableDirectory))
-            return defaultFallback;
-
-        string historyDirectory = Path.Combine(executableDirectory, "history");
+        string? exePath = Path.GetDirectoryName(System.AppContext.BaseDirectory);
+        string historyDirectory = $"{exePath}\\history";
 
         switch (storageKind)
         {
             case FileStorageKind.Absolute:
                 return filename;
             case FileStorageKind.WithExe:
-                return executableDirectory;
+                return $"{exePath!}";
             case FileStorageKind.WithHistory:
-                return historyDirectory;
+                return $"{historyDirectory}";
             default:
                 break;
         }
 
-        return defaultFallback;
+        return $"c:\\";
     }
 
     private static async Task<StorageFolder> GetStorageFolderPackaged(string fileName, FileStorageKind storageKind)
@@ -365,11 +290,11 @@ public class FileUtilities
         return true;
     }
 #pragma warning restore CS1998
-
-    public static async void TryDeleteHistoryDirectory()
+    
+    public async static void TryDeleteHistoryDirectory()
     {
         FileStorageKind historyFolderKind = FileStorageKind.WithHistory;
-        if (AppUtilities.IsPackaged() && AutomationProfile.Current is null)
+        if (ImplementAppOptions.IsPackaged())
         {
             StorageFolder historyFolder = await GetStorageFolderPackaged("", historyFolderKind);
 
@@ -389,12 +314,5 @@ public class FileUtilities
         }
         catch { }
     }
-
-    public static string GetExePath()
-    {
-        if (!string.IsNullOrEmpty(Environment.ProcessPath))
-            return Environment.ProcessPath;
-        
-        return "";
-    }
+    #endregion Private Methods
 }

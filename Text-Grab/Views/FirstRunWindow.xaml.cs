@@ -10,10 +10,12 @@ using Wpf.Ui.Controls;
 
 namespace Text_Grab;
 
+/// <summary>
+/// Interaction logic for FirstRunWindow.xaml
+/// </summary>
 public partial class FirstRunWindow : FluentWindow
 {
-    private readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
-    private bool settingsInitialized;
+    #region Constructors
 
     public FirstRunWindow()
     {
@@ -21,11 +23,23 @@ public partial class FirstRunWindow : FluentWindow
         App.SetTheme();
     }
 
+    #endregion Constructors
+
+    #region Methods
+
+    private void BackgroundCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleSwitch toggleSwitch && toggleSwitch.IsChecked is not null)
+        {
+            Settings.Default.RunInTheBackground = (bool)toggleSwitch.IsChecked;
+            ImplementAppOptions.ImplementBackgroundOption(Settings.Default.RunInTheBackground);
+            Settings.Default.Save();
+        }
+    }
+
     private async void FirstRun_Loaded(object sender, RoutedEventArgs e)
     {
-        settingsInitialized = false;
-
-        TextGrabMode defaultLaunchSetting = GetDefaultLaunchSetting();
+        TextGrabMode defaultLaunchSetting = Enum.Parse<TextGrabMode>(Settings.Default.DefaultLaunch, true);
         switch (defaultLaunchSetting)
         {
             case TextGrabMode.Fullscreen:
@@ -45,7 +59,7 @@ public partial class FirstRunWindow : FluentWindow
                 break;
         }
 
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
         {
             StartupTask startupTask = await StartupTask.GetAsync("StartTextGrab");
 
@@ -70,13 +84,12 @@ public partial class FirstRunWindow : FluentWindow
         }
         else
         {
-            StartupCheckbox.IsChecked = DefaultSettings.StartupOnLogin;
+            StartupCheckbox.IsChecked = Settings.Default.StartupOnLogin;
         }
 
-        BackgroundCheckBox.IsChecked = DefaultSettings.RunInTheBackground;
+        BackgroundCheckBox.IsChecked = Settings.Default.RunInTheBackground;
 
-        NotificationsCheckBox.IsChecked = DefaultSettings.ShowToast;
-        settingsInitialized = true;
+        NotificationsCheckBox.IsChecked = Settings.Default.ShowToast;
     }
 
     private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
@@ -87,13 +100,10 @@ public partial class FirstRunWindow : FluentWindow
 
     private void NotificationsCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsInitialized)
-            return;
-
         if (sender is ToggleSwitch toggleSwitch && toggleSwitch.IsChecked is not null)
         {
-            DefaultSettings.ShowToast = (bool)toggleSwitch.IsChecked;
-            DefaultSettings.Save();
+            Settings.Default.ShowToast = (bool)toggleSwitch.IsChecked;
+            Settings.Default.Save();
         }
     }
 
@@ -101,9 +111,9 @@ public partial class FirstRunWindow : FluentWindow
     {
         int windowsCount = Application.Current.Windows.Count;
 
-        if (windowsCount is 2 or 1)
+        if (windowsCount == 2 || windowsCount == 1)
         {
-            TextGrabMode defaultLaunchSetting = GetDefaultLaunchSetting();
+            TextGrabMode defaultLaunchSetting = Enum.Parse<TextGrabMode>(Settings.Default.DefaultLaunch, true);
             switch (defaultLaunchSetting)
             {
                 case TextGrabMode.Fullscreen:
@@ -127,19 +137,19 @@ public partial class FirstRunWindow : FluentWindow
     }
     private void RadioButton_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsInitialized)
+        if (this.IsLoaded != true)
             return;
 
         if (GrabFrameRDBTN.IsChecked is bool gfOn && gfOn)
-            DefaultSettings.DefaultLaunch = TextGrabMode.GrabFrame.ToString();
+            Settings.Default.DefaultLaunch = "GrabFrame";
         else if (FullScreenRDBTN.IsChecked is bool fsgOn && fsgOn)
-            DefaultSettings.DefaultLaunch = TextGrabMode.Fullscreen.ToString();
+            Settings.Default.DefaultLaunch = "Fullscreen";
         else if (QuickLookupRDBTN.IsChecked is bool qslOn && qslOn)
-            DefaultSettings.DefaultLaunch = TextGrabMode.QuickLookup.ToString();
+            Settings.Default.DefaultLaunch = "QuickLookup";
         else
-            DefaultSettings.DefaultLaunch = TextGrabMode.EditText.ToString();
+            Settings.Default.DefaultLaunch = "EditText";
 
-        DefaultSettings.Save();
+        Settings.Default.Save();
     }
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
@@ -148,21 +158,13 @@ public partial class FirstRunWindow : FluentWindow
         this.Close();
     }
 
-    private void LicensesButton_Click(object sender, RoutedEventArgs e)
-    {
-        WindowUtilities.OpenOrActivateWindow<LicensesWindow>();
-    }
-
     private async void StartupCheckbox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsInitialized)
-            return;
-
         if (sender is ToggleSwitch toggleSwitch && toggleSwitch.IsChecked is not null)
         {
-            DefaultSettings.StartupOnLogin = (bool)toggleSwitch.IsChecked;
-            await ImplementAppOptions.ImplementStartupOption(DefaultSettings.StartupOnLogin);
-            DefaultSettings.Save();
+            Settings.Default.StartupOnLogin = (bool)toggleSwitch.IsChecked;
+            await ImplementAppOptions.ImplementStartupOption(Settings.Default.StartupOnLogin);
+            Settings.Default.Save();
         }
     }
 
@@ -187,28 +189,8 @@ public partial class FirstRunWindow : FluentWindow
 
     private void Window_Closed(object? sender, EventArgs e)
     {
-        if (!settingsInitialized)
-        {
-            WindowUtilities.ShouldShutDown();
-            return;
-        }
-
-        if (BackgroundCheckBox is ToggleSwitch toggleSwitch
-            && toggleSwitch.IsChecked is not null)
-        {
-            DefaultSettings.RunInTheBackground = (bool)toggleSwitch.IsChecked;
-            DefaultSettings.Save();
-            ImplementAppOptions.ImplementBackgroundOption(DefaultSettings.RunInTheBackground);
-        }
-
         WindowUtilities.ShouldShutDown();
     }
 
-    private TextGrabMode GetDefaultLaunchSetting()
-    {
-        if (Enum.TryParse(DefaultSettings.DefaultLaunch, true, out TextGrabMode defaultLaunchSetting))
-            return defaultLaunchSetting;
-
-        return TextGrabMode.Fullscreen;
-    }
+    #endregion Methods
 }

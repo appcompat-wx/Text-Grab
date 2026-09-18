@@ -21,77 +21,22 @@ namespace Text_Grab.Pages;
 /// </summary>
 public partial class LanguageSettings : Page
 {
-    private readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
-    private bool loadingLanguageSettings = false;
-
+    private bool usingTesseract;
 
     public LanguageSettings()
     {
         InitializeComponent();
+        usingTesseract = Settings.Default.UseTesseract && TesseractHelper.CanLocateTesseractExe();
     }
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        loadingLanguageSettings = true;
-
-        LoadAiStatus();
-        LoadWindowsAiDescriptionSettings();
         LoadWindowsLanguages();
-        LoadUiAutomationSettings();
 
-        RemoveFuriganaToggle.IsChecked = DefaultSettings.RemoveFurigana;
-
-        if (DefaultSettings.UseTesseract)
+        if (usingTesseract)
         {
             TesseractLanguagesStackPanel.Visibility = Visibility.Visible;
             await LoadTesseractContent();
-        }
-        else
-        {
-            TesseractLanguagesStackPanel.Visibility = Visibility.Collapsed;
-        }
-
-        loadingLanguageSettings = false;
-    }
-
-    private void LoadAiStatus()
-    {
-        if (OSInterop.IsWindows10())
-        {
-            StatusTextBlock.Text = "Not supported";
-            ReasonTextBlock.Text = "Windows AI is not supported on Windows 10.";
-            return;
-        }
-
-        // Check if the app is packaged and if the AI feature is supported
-        if (!AppUtilities.IsPackaged())
-        {
-            StatusTextBlock.Text = "Not supported";
-            ReasonTextBlock.Text = "Windows AI is only supported in packaged apps.";
-            StoreLink.Visibility = Visibility.Visible;
-            return;
-        }
-
-        try
-        {
-            if (!WindowsAiUtilities.CanDeviceUseWinAI())
-            {
-                StatusTextBlock.Text = "Not supported";
-                ReasonTextBlock.Text = "Windows AI is not supported on this system.";
-                return;
-            }
-            else
-            {
-                StatusTextBlock.Text = "Ready";
-                ReasonTextBlock.Text = "Windows AI is supported on this system.";
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusTextBlock.Text = "Failed to ready";
-            ReasonTextBlock.Text = $"An error occurred while checking Windows AI support: {ex.Message}";
-            return;
         }
     }
 
@@ -124,28 +69,6 @@ public partial class LanguageSettings : Page
         }
     }
 
-    private void LoadUiAutomationSettings()
-    {
-        UiAutomationEnabledToggle.IsChecked = DefaultSettings.UiAutomationEnabled;
-        UiAutomationFallbackToggle.IsChecked = DefaultSettings.UiAutomationFallbackToOcr;
-        UiAutomationIncludeOffscreenToggle.IsChecked = DefaultSettings.UiAutomationIncludeOffscreen;
-        UiAutomationPreferFocusedToggle.IsChecked = DefaultSettings.UiAutomationPreferFocusedElement;
-
-        UiAutomationTraversalModeComboBox.ItemsSource = Enum.GetValues<UiAutomationTraversalMode>();
-        if (Enum.TryParse(DefaultSettings.UiAutomationTraversalMode, true, out UiAutomationTraversalMode traversalMode))
-            UiAutomationTraversalModeComboBox.SelectedItem = traversalMode;
-        else
-            UiAutomationTraversalModeComboBox.SelectedItem = UiAutomationTraversalMode.Balanced;
-
-        UpdateUiAutomationControlState();
-    }
-
-    private void LoadWindowsAiDescriptionSettings()
-    {
-        WindowsAiDescriptionEnabledToggle.IsChecked = DefaultSettings.WindowsAiDescriptionEnabled;
-        WindowsAiDescriptionEnabledToggle.IsEnabled = WindowsAiUtilities.CanDeviceDescribeImagesWithWinAI();
-    }
-
     private async void InstallButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(AllLanguagesComboBox.Text))
@@ -155,9 +78,9 @@ public partial class LanguageSettings : Page
         if (string.IsNullOrWhiteSpace(pickedLanguageFile))
             return;
 
-        string tesseractPath = Path.GetDirectoryName(DefaultSettings.TesseractPath) ?? "c:\\";
+        string tesseractPath = Path.GetDirectoryName(Settings.Default.TesseractPath) ?? "c:\\";
         string tesseractFilePath = $"{tesseractPath}\\tessdata\\{pickedLanguageFile}";
-        string tempFilePath = Path.Combine(AutomationProfile.GetTemporaryDirectory(), pickedLanguageFile);
+        string tempFilePath = Path.Combine(Path.GetTempPath(), pickedLanguageFile);
 
         TesseractGitHubFileDownloader fileDownloader = new();
         await fileDownloader.DownloadFileAsync(pickedLanguageFile, tempFilePath);
@@ -169,87 +92,6 @@ public partial class LanguageSettings : Page
     private void HyperlinkButton_Click(object sender, RoutedEventArgs e)
     {
 
-    }
-
-    private void UiAutomationEnabledToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        DefaultSettings.UiAutomationEnabled = UiAutomationEnabledToggle.IsChecked is true;
-        DefaultSettings.Save();
-        LanguageUtilities.InvalidateAllCaches();
-        UpdateUiAutomationControlState();
-    }
-
-    private void UiAutomationFallbackToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        DefaultSettings.UiAutomationFallbackToOcr = UiAutomationFallbackToggle.IsChecked is true;
-        DefaultSettings.Save();
-    }
-
-    private void UiAutomationPreferFocusedToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        DefaultSettings.UiAutomationPreferFocusedElement = UiAutomationPreferFocusedToggle.IsChecked is true;
-        DefaultSettings.Save();
-    }
-
-    private void UiAutomationIncludeOffscreenToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        DefaultSettings.UiAutomationIncludeOffscreen = UiAutomationIncludeOffscreenToggle.IsChecked is true;
-        DefaultSettings.Save();
-    }
-
-    private void UiAutomationTraversalModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (loadingLanguageSettings
-            || UiAutomationTraversalModeComboBox.SelectedItem is not UiAutomationTraversalMode traversalMode)
-            return;
-
-        DefaultSettings.UiAutomationTraversalMode = traversalMode.ToString();
-        DefaultSettings.Save();
-    }
-
-    private void RemoveFuriganaToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        DefaultSettings.RemoveFurigana = RemoveFuriganaToggle.IsChecked is true;
-        DefaultSettings.Save();
-        LanguageUtilities.InvalidateAllCaches();
-    }
-
-    private void WindowsAiDescriptionEnabledToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (loadingLanguageSettings)
-            return;
-
-        if (!WindowsAiUtilities.CanDeviceDescribeImagesWithWinAI())
-        {
-            WindowsAiDescriptionEnabledToggle.IsChecked = false;
-            return;
-        }
-
-        DefaultSettings.WindowsAiDescriptionEnabled = WindowsAiDescriptionEnabledToggle.IsChecked is true;
-        DefaultSettings.Save();
-        LanguageUtilities.InvalidateAllCaches();
-    }
-
-    private void UpdateUiAutomationControlState()
-    {
-        UiAutomationAdvancedOptionsPanel.Visibility = DefaultSettings.UiAutomationEnabled
-            ? Visibility.Visible
-            : Visibility.Collapsed;
     }
 
     public async Task CopyFileWithElevatedPermissions(string sourcePath, string destinationPath)
@@ -276,8 +118,7 @@ public partial class LanguageSettings : Page
             Process? process = Process.Start(startInfo);
             // string errors = process?.StandardError.ReadToEnd();
             // string output = process?.StandardOutput.ReadToEnd();
-            if (process is not null)
-                await process.WaitForExitAsync();
+            await process?.WaitForExitAsync();
 
             // if (!string.IsNullOrEmpty(errors))
             //     ErrorsAndOutputText.Text += Environment.NewLine + errors;
@@ -289,18 +130,13 @@ public partial class LanguageSettings : Page
         {
             // The user refused the elevation.
             // Handle this situation as you prefer.
-            await new Wpf.Ui.Controls.MessageBox
-            {
-                Title = "Error",
-                Content = ex.Message,
-                CloseButtonText = "OK"
-            }.ShowDialogAsync();
+            MessageBox.Show(ex.Message);
         }
     }
 
     private void OpenPathButton_Click(object sender, RoutedEventArgs e)
     {
-        string tesseractPath = Path.GetDirectoryName(DefaultSettings.TesseractPath) ?? string.Empty;
+        string tesseractPath = Path.GetDirectoryName(Settings.Default.TesseractPath) ?? string.Empty;
         if (string.IsNullOrWhiteSpace(tesseractPath))
             return;
 

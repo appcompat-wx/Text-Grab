@@ -1,9 +1,10 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Runtime.InteropServices;
 
-internal static class WPFExtensionMethods
+
+static class WPFExtensionMethods
 {
     public static Point GetAbsolutePosition(this Window w)
     {
@@ -14,15 +15,15 @@ internal static class WPFExtensionMethods
         bool multimonSupported = OSInterop.GetSystemMetrics(OSInterop.SM_CMONITORS) != 0;
         if (!multimonSupported)
         {
-            OSInterop.RECT rc = new();
+            OSInterop.RECT rc = new OSInterop.RECT();
             OSInterop.SystemParametersInfo(48, 0, ref rc, 0);
             r = new Int32Rect(rc.left, rc.top, rc.width, rc.height);
         }
         else
         {
-            WindowInteropHelper helper = new(w);
+            WindowInteropHelper helper = new WindowInteropHelper(w);
             IntPtr hmonitor = OSInterop.MonitorFromWindow(new HandleRef(null, helper.EnsureHandle()), 2);
-            OSInterop.MONITORINFOEX info = new();
+            OSInterop.MONITORINFOEX info = new OSInterop.MONITORINFOEX();
             OSInterop.GetMonitorInfo(new HandleRef(null, hmonitor), info);
             r = new Int32Rect(info.rcMonitor.left, info.rcMonitor.top, info.rcMonitor.width, info.rcMonitor.height);
         }

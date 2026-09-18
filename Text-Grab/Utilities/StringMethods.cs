@@ -6,17 +6,15 @@ using System.Text.RegularExpressions;
 
 namespace Text_Grab.Utilities;
 
-public static partial class StringMethods
+public static class StringMethods
 {
-    public static readonly List<Char> specialCharList = [
-        '\\', ' ', '.', ',', '$', '^', '{', '[', '(', '|', ')',
-        '*', '+', '?', '=' ];
+    public static readonly List<Char> specialCharList = new()
+    { '\\', ' ', '.', ',', '$', '^', '{', '[', '(', '|', ')', '*', '+', '?', '=' };
 
-    public static readonly List<Char> ReservedChars = [
-        ' ', '"', '*', '/', ':', '<', '>', '?', '\\', '|', '+',
-        ',', '.', ';', '=', '[', ']', '!', '@' ];
+    public static readonly List<Char> ReservedChars = new()
+    { ' ', '"', '*', '/', ':', '<', '>', '?', '\\', '|', '+', ',', '.', ';', '=', '[', ']', '!', '@' };
 
-    public static readonly Dictionary<char, char> GreekCyrillicLatinMap = new()
+    public static readonly Dictionary<char, char> greekCyrillicLatinMap = new()
     {
         // Similar Looking Greek characters
         {'Γ', 'r'}, {'Δ', 'A'}, {'Θ', 'O'}, {'Λ', 'A'}, {'Ξ', 'E'},
@@ -45,61 +43,41 @@ public static partial class StringMethods
         {'ø', 'e'},
     };
 
-    public static readonly Dictionary<char, char> NumbersToLetters = new()
+    public static Dictionary<char, char> NumbersToLetters = new()
     {
-        {'0', 'o'}, {'4', 'h'}, {'9', 'g'}, {'1', 'l'}, {'8', 'B'},
-        {'5', 'S'}, {'6', 'b'}, {'2', 'z' }
+        {'0', 'o'}, {'4', 'h'}, {'9', 'g'}, {'1', 'l'}
     };
 
-    public static readonly Dictionary<char, char> LettersToNumbers = new()
+    public static Dictionary<char, char> LettersToNumbers = new()
     {
         {'o', '0'}, {'O', '0'}, {'Q', '0'}, {'c', '0'}, {'C', '0'},
-        {'i', '1'}, {'I', '1'}, {'l', '1'}, {'g', '9'}, {'G', '9'},
-        {'h', '4'}, {'H', '4'}, {'s', '5'}, {'S', '5'}, {'B', '8'},
-        {'b', '6'}, {'z', '2'}, {'Z', '2'}
-    };
-
-    public static readonly Dictionary<char, char> GuidCorrections = new()
-    {
-        {'o', '0'}, {'O', '0'}, {'i', '1'}, {'l', '1'}, {'I', '1'},
-        {'h', '4'}, {'z', '2'}, {'Z', '2'}, {'g', '9'}, {'G', '9'},
-        {'s', '5'}, {'S', '5'}, {'Ø', '0'}, {'#', 'f'}, {'@', '0'},
-        {'Q', '0'}, {'¥', 'f'}, {'£', 'f'}, {'/', '7'}
+        {'i', '1'}, {'I', '1'}, {'l', '1'}, {'g', '9'}
     };
 
     public static string ReplaceWithDictionary(this string str, Dictionary<char, char> dict)
     {
-        StringBuilder sb = new();
+        var sb = new StringBuilder();
 
         foreach (char c in str)
-            sb.Append(dict.TryGetValue(c, out char value) ? value : c);
+        {
+            sb.Append(dict.ContainsKey(c) ? dict[c] : c);
+        }
 
         return sb.ToString();
     }
 
     public static string ReplaceGreekOrCyrillicWithLatin(this string str)
     {
-        return str.ReplaceWithDictionary(GreekCyrillicLatinMap);
+        return str.ReplaceWithDictionary(greekCyrillicLatinMap);
     }
 
-    public static string CorrectCommonGuidErrors(this string guid)
+    public static IEnumerable<int> AllIndexesOf(this string str, string searchstring)
     {
-        // remove all spaces
-        guid = guid.Replace(" ", "");
-        // if a line ends with a dash remove the newline after the dash
-        guid = guid.Replace("-\r\n", "-");
-        // if a line begins with a dash remove the newline before the dash
-        guid = guid.Replace("\r\n-", "-");
-        return guid.ReplaceWithDictionary(GuidCorrections);
-    }
-
-    public static IEnumerable<int> AllIndexesOf(this string str, string searchString)
-    {
-        int minIndex = str.IndexOf(searchString);
+        int minIndex = str.IndexOf(searchstring);
         while (minIndex != -1)
         {
             yield return minIndex;
-            minIndex = str.IndexOf(searchString, minIndex + searchString.Length);
+            minIndex = str.IndexOf(searchstring, minIndex + searchstring.Length);
         }
     }
 
@@ -119,11 +97,12 @@ public static partial class StringMethods
         if (string.IsNullOrEmpty(input))
             return (0, 0);
 
-        cursorPosition = Math.Clamp(cursorPosition, 0, input.Length - 1);
+        if (cursorPosition < 0)
+            cursorPosition = 0;
 
         // Check if the cursor is at a space
         if (char.IsWhiteSpace(input[cursorPosition]))
-            cursorPosition = FindNearestLetterIndex(input, cursorPosition);
+            cursorPosition = findNearestLetterIndex(input, cursorPosition);
 
         // Find the start and end of the word by moving the cursor
         // backwards and forwards until we find a non-letter character.
@@ -153,9 +132,9 @@ public static partial class StringMethods
         return input.Substring(start, length);
     }
 
-    private static int FindNearestLetterIndex(string input, int cursorPosition)
+    private static int findNearestLetterIndex(string input, int cursorPosition)
     {
-        cursorPosition = Math.Clamp(cursorPosition, 0, input.Length - 1);
+        Math.Clamp(cursorPosition, 0, input.Length - 1);
 
         int lastCharIndex = input.Length - 1;
 
@@ -172,12 +151,6 @@ public static partial class StringMethods
         if (nearestToTheLeft < 0
             && nearestToTheRight > lastCharIndex)
             return cursorPosition;
-
-        if (nearestToTheLeft < 0)
-            return nearestToTheRight;
-
-        if (nearestToTheRight > lastCharIndex)
-            return nearestToTheLeft;
 
         int leftDistance = cursorPosition - nearestToTheLeft;
         int rightDistance = nearestToTheRight - cursorPosition;
@@ -269,14 +242,14 @@ public static partial class StringMethods
     public static string TryFixEveryWordLetterNumberErrors(this string stringToFix)
     {
         string[] listOfWords = stringToFix.Split(' ');
-        List<string> fixedWords = [];
+        List<string> fixedWords = new();
 
         foreach (string word in listOfWords)
         {
             string newWord = word.TryFixNumberLetterErrors();
             fixedWords.Add(newWord);
         }
-        string joinedString = string.Join(' ', [.. fixedWords]);
+        string joinedString = string.Join(' ', fixedWords.ToArray());
         joinedString = joinedString.Replace("\t ", "\t");
         joinedString = joinedString.Replace("\r ", "\r");
         joinedString = joinedString.Replace("\n ", "\n");
@@ -296,42 +269,17 @@ public static partial class StringMethods
         workingString.Replace('\n', ' ');
         workingString.Replace('\r', ' ');
 
-        string temp = MultiSpaces().Replace(workingString.ToString(), " ");
+        Regex regex = new("[ ]{2,}");
+        string temp = regex.Replace(workingString.ToString(), " ");
         workingString.Clear();
         workingString.Append(temp);
-        if (workingString.Length == 0)
-            return string.Empty;
-
         if (workingString[0] == ' ')
             workingString.Remove(0, 1);
 
-        if (workingString.Length == 0)
-            return string.Empty;
-
-        if (workingString[^1] == ' ')
+        if (workingString[workingString.Length - 1] == ' ')
             workingString.Remove(workingString.Length - 1, 1);
 
         return workingString.ToString();
-    }
-
-    public static string JoinLines(this string textToJoin, string joiningText, bool trimLineBeforeJoining, string textAtBeginning = "", string textAtEnd = "")
-    {
-        ArgumentNullException.ThrowIfNull(textToJoin);
-        ArgumentNullException.ThrowIfNull(joiningText);
-        ArgumentNullException.ThrowIfNull(textAtBeginning);
-        ArgumentNullException.ThrowIfNull(textAtEnd);
-
-        string normalizedText = NewlineRegex().Replace(textToJoin, Environment.NewLine);
-        string[] lines = normalizedText.Split([Environment.NewLine], StringSplitOptions.None);
-
-        if (normalizedText.EndsWith(Environment.NewLine, StringComparison.Ordinal) && lines.Length > 0)
-            lines = [.. lines[..^1]];
-
-        if (trimLineBeforeJoining)
-            lines = [.. lines.Select(line => line.Trim())];
-
-        string joinedText = string.Join(joiningText, lines);
-        return $"{textAtBeginning}{joinedText}{textAtEnd}";
     }
 
     public static string ToCamel(this string stringToCamel)
@@ -396,8 +344,8 @@ public static partial class StringMethods
     public class CharRun
     {
         public CharType TypeOfChar { get; set; }
-        public char Character { get; set; }
-        public int NumberOfRun { get; set; }
+        public Char Character { get; set; }
+        public int numberOfRun { get; set; }
     }
 
     public static string ReplaceReservedCharacters(this string stringToClean)
@@ -405,10 +353,10 @@ public static partial class StringMethods
         StringBuilder sb = new();
         sb.Append(stringToClean);
 
-        foreach (char reservedChar in ReservedChars)
+        foreach (Char reservedChar in ReservedChars)
             sb.Replace(reservedChar, '-');
 
-        return MultiDashes().Replace(sb.ToString(), "-");
+        return Regex.Replace(sb.ToString(), @"-+", "-");
     }
 
     public static string EscapeSpecialRegexChars(this string stringToEscape, bool matchExactly)
@@ -427,42 +375,20 @@ public static partial class StringMethods
         return sb.ToString();
     }
 
-    public static string ExtractSimplePattern(this string stringToExtract, int precisionLevel = 3, bool ignoreCase = false)
+    public static string ExtractSimplePattern(this string stringToExtract)
     {
-        // precisionLevel ranges from 0 (least precise) to 5 (most precise)
-        // 0: \S+ (non-whitespace)
-        // 1: \w+ (word characters)
-        // 2: \w{count} (word characters with count)
-        // 3: [A-Za-z]{3}\d{3} (character types with counts) - DEFAULT
-        // 4: (?i)Abc123 (individual character class per position)
-        // 5: Abc123 (exact escaped string) - most precise
-
-        if (string.IsNullOrEmpty(stringToExtract))
-            return string.Empty;
-
-        // Inline regex flag for case insensitivity
-        string caseFlag = ignoreCase ? "(?i)" : string.Empty;
-
-        // Level 0: Just match any non-whitespace
-        if (precisionLevel == 0)
-            return $@"{caseFlag}\S+";
-
-        // Level 1: Match word characters
-        if (precisionLevel == 1)
-            return $@"{caseFlag}\w+";
-
-        List<CharRun> charRunList = [];
+        List<CharRun> charRunList = new();
 
         foreach (char c in stringToExtract)
         {
             CharType thisCharType = CharType.Other;
-            if (char.IsWhiteSpace(c))
+            if (Char.IsWhiteSpace(c))
                 thisCharType = CharType.Space;
             else if (specialCharList.Contains(c))
                 thisCharType = CharType.Special;
-            else if (char.IsLetter(c))
+            else if (Char.IsLetter(c))
                 thisCharType = CharType.Letter;
-            else if (char.IsNumber(c))
+            else if (Char.IsNumber(c))
                 thisCharType = CharType.Number;
 
             if (thisCharType == charRunList.LastOrDefault()?.TypeOfChar)
@@ -470,11 +396,11 @@ public static partial class StringMethods
                 if (thisCharType == CharType.Other)
                 {
                     if (c == charRunList.Last().Character)
-                        charRunList.Last().NumberOfRun++;
+                        charRunList.Last().numberOfRun++;
                 }
                 else
                 {
-                    charRunList.Last().NumberOfRun++;
+                    charRunList.Last().numberOfRun++;
                 }
             }
             else
@@ -482,7 +408,7 @@ public static partial class StringMethods
                 CharRun newRun = new()
                 {
                     Character = c,
-                    NumberOfRun = 1,
+                    numberOfRun = 1,
                     TypeOfChar = thisCharType
                 };
                 charRunList.Add(newRun);
@@ -490,137 +416,38 @@ public static partial class StringMethods
         }
 
         StringBuilder sb = new();
+        // sb.Append("(");
 
-        // Level 2: Word characters with count but no type differentiation
-        if (precisionLevel == 2)
-        {
-            foreach (CharRun ct in charRunList)
-            {
-                switch (ct.TypeOfChar)
-                {
-                    case CharType.Letter:
-                    case CharType.Number:
-                        sb.Append(@"\w");
-                        break;
-                    case CharType.Space:
-                        sb.Append(@"\s");
-                        break;
-                    case CharType.Special:
-                        sb.Append($@"(\{ct.Character})");
-                        break;
-                    default:
-                        sb.Append(ct.Character);
-                        break;
-                }
-
-                if (ct.NumberOfRun > 1)
-                {
-                    sb.Append('{').Append(ct.NumberOfRun).Append('}');
-                }
-            }
-            return $"{caseFlag}{sb.ToString().ShortenRegexPattern()}";
-        }
-
-        // Level 3: Character types with counts (DEFAULT - original behavior)
-        if (precisionLevel == 3)
-        {
-            foreach (CharRun ct in charRunList)
-            {
-                switch (ct.TypeOfChar)
-                {
-                    case CharType.Letter:
-                        sb.Append("[A-Za-z]");
-                        break;
-                    case CharType.Number:
-                        sb.Append(@"\d");
-                        break;
-                    case CharType.Space:
-                        sb.Append(@"\s");
-                        break;
-                    case CharType.Special:
-                        sb.Append($@"(\{ct.Character})");
-                        break;
-                    default:
-                        sb.Append(ct.Character);
-                        break;
-                }
-
-                if (ct.NumberOfRun > 1)
-                {
-                    sb.Append('{').Append(ct.NumberOfRun).Append('}');
-                }
-            }
-            return $"{caseFlag}{sb.ToString().ShortenRegexPattern()}";
-        }
-
-        // Level 4: Individual character class per position (each position matches one specific character)
-        // When ignoreCase is true, use (?i) flag instead of [Aa] character classes
-        if (precisionLevel == 4)
-        {
-            foreach (char c in stringToExtract)
-            {
-                if (char.IsWhiteSpace(c))
-                {
-                    sb.Append(@"\s");
-                }
-                else if (specialCharList.Contains(c))
-                {
-                    sb.Append($@"(\{c})");
-                }
-                else if (char.IsLetter(c) && c.IsBasicLatin())
-                {
-                    sb.Append(Regex.Escape(c.ToString()));
-                }
-                else if (char.IsDigit(c))
-                {
-                    // Digits don't need brackets - match exact digit
-                    sb.Append(Regex.Escape(c.ToString()));
-                }
-                else
-                {
-                    // Non-Latin letters and other characters - exact match with escaping
-                    sb.Append(Regex.Escape(c.ToString()));
-                }
-            }
-            return $"(?i){sb}";
-        }
-
-        // Level 5: Exact escaped string (most precise - exact match)
-        if (precisionLevel == 5)
-        {
-            // no ignore case flag here for exact match
-            return $"{Regex.Escape(stringToExtract)}";
-        }
-
-        // Default to level 3
         foreach (CharRun ct in charRunList)
         {
+            // append previous stuff to the string       
             switch (ct.TypeOfChar)
             {
                 case CharType.Letter:
-                    sb.Append("[A-Za-z]");
+                    // sb.Append("\\w");
+                    sb.Append("[A-z]");
                     break;
                 case CharType.Number:
-                    sb.Append(@"\d");
+                    sb.Append("\\d");
                     break;
                 case CharType.Space:
-                    sb.Append(@"\s");
+                    sb.Append("\\s");
                     break;
                 case CharType.Special:
-                    sb.Append($@"(\{ct.Character})");
+                    sb.Append($"(\\{ct.Character})");
                     break;
                 default:
                     sb.Append(ct.Character);
                     break;
             }
 
-            if (ct.NumberOfRun > 1)
+            if (ct.numberOfRun > 1)
             {
-                sb.Append('{').Append(ct.NumberOfRun).Append('}');
+                sb.Append('{').Append(ct.numberOfRun).Append('}');
             }
         }
 
-        return $"{caseFlag}{sb.ToString().ShortenRegexPattern()}";
+        return sb.ToString().ShortenRegexPattern();
     }
 
     private static string ShortenRegexPattern(this string pattern)
@@ -630,14 +457,15 @@ public static partial class StringMethods
 
         StringBuilder sb = new();
 
-        List<string> possibleShortenedPatterns = [originalPattern];
+        List<string> possibleShortenedPatterns = new();
+        possibleShortenedPatterns.Add(originalPattern);
 
         // only look for patterns which are 4 - length / 3 long.
         int maxRepSegCheckLen = originalPattern.Length / 3;
 
         for (int i = 4; i < maxRepSegCheckLen; i++)
         {
-            List<string> chunkLists = [.. Split(originalPattern, i)];
+            List<string> chunkLists = Split(originalPattern, i).ToList();
             //int chunkID = 0;
             //while (chunkID * (i+ 1) < originalPattern.Length)
             //{
@@ -672,12 +500,12 @@ public static partial class StringMethods
             sb.Clear();
         }
 
-        possibleShortenedPatterns = [.. possibleShortenedPatterns.OrderBy(p => p.Length)];
+        possibleShortenedPatterns = possibleShortenedPatterns.OrderBy(p => p.Length).ToList();
 
         return possibleShortenedPatterns.First();
     }
 
-    private static IEnumerable<string> Split(string str, int chunkSize)
+    static IEnumerable<string> Split(string str, int chunkSize)
     {
         return Enumerable.Range(0, str.Length / chunkSize)
             .Select(i => str.Substring(i * chunkSize, chunkSize));
@@ -687,9 +515,9 @@ public static partial class StringMethods
     {
         StringBuilder sbUnstacked = new();
 
-        stringToUnstack = NewlineRegex().Replace(stringToUnstack, Environment.NewLine);
+        stringToUnstack = Regex.Replace(stringToUnstack, @"(\r\n|\n|\r)", Environment.NewLine);
 
-        string[] splitString = stringToUnstack.Split([Environment.NewLine], StringSplitOptions.TrimEntries);
+        string[] splitString = stringToUnstack.Split(new string[] { Environment.NewLine }, StringSplitOptions.TrimEntries);
 
         int columnIterator = 0;
 
@@ -716,9 +544,9 @@ public static partial class StringMethods
     {
         StringBuilder sbUnstacked = new();
 
-        stringGroupedToUnstack = NewlineRegex().Replace(stringGroupedToUnstack, Environment.NewLine);
+        stringGroupedToUnstack = Regex.Replace(stringGroupedToUnstack, @"(\r\n|\n|\r)", Environment.NewLine);
 
-        string[] splitInputString = stringGroupedToUnstack.Split([Environment.NewLine], StringSplitOptions.TrimEntries);
+        string[] splitInputString = stringGroupedToUnstack.Split(new string[] { Environment.NewLine }, StringSplitOptions.TrimEntries);
 
         int numberOfColumns = splitInputString.Length / numberOfRows;
 
@@ -746,39 +574,14 @@ public static partial class StringMethods
 
     public static string RemoveDuplicateLines(this string stringToDeduplicate)
     {
-        string[] splitString = stringToDeduplicate.Split([Environment.NewLine], StringSplitOptions.TrimEntries);
-        List<string> uniqueLines = [];
+        string[] splitString = stringToDeduplicate.Split(new string[] { System.Environment.NewLine }, StringSplitOptions.TrimEntries);
+        List<string> uniqueLines = new();
 
         foreach (string originalLine in splitString)
             if (!uniqueLines.Contains(originalLine))
                 uniqueLines.Add(originalLine);
 
-        return string.Join(Environment.NewLine, [.. uniqueLines]);
-    }
-
-    public static string ShuffleLines(this string textToShuffle, Random? random = null)
-    {
-        ArgumentNullException.ThrowIfNull(textToShuffle);
-
-        string[] lines = textToShuffle.Split([Environment.NewLine], StringSplitOptions.None);
-        bool endsWithNewline = textToShuffle.EndsWith(Environment.NewLine, StringComparison.Ordinal);
-
-        if (endsWithNewline)
-            lines = [.. lines[..^1]];
-
-        if (lines.Length <= 1)
-            return textToShuffle;
-
-        random ??= Random.Shared;
-
-        for (int i = lines.Length - 1; i > 0; i--)
-        {
-            int swapIndex = random.Next(i + 1);
-            (lines[i], lines[swapIndex]) = (lines[swapIndex], lines[i]);
-        }
-
-        string shuffledText = string.Join(Environment.NewLine, lines);
-        return endsWithNewline ? $"{shuffledText}{Environment.NewLine}" : shuffledText;
+        return string.Join(Environment.NewLine, uniqueLines.ToArray());
     }
 
     public static string RemoveAllInstancesOf(this string stringToBeEdited, string stringToRemove)
@@ -789,7 +592,7 @@ public static partial class StringMethods
 
     public static string RemoveFromEachLine(this string stringToEdit, int numberOfChars, SpotInLine spotInLine)
     {
-        string[] splitString = stringToEdit.Split([Environment.NewLine], StringSplitOptions.None);
+        string[] splitString = stringToEdit.Split(new string[] { System.Environment.NewLine }, StringSplitOptions.None);
 
         StringBuilder sb = new();
         foreach (string line in splitString)
@@ -804,10 +607,10 @@ public static partial class StringMethods
             switch (spotInLine)
             {
                 case SpotInLine.Beginning:
-                    sb.AppendLine(line[numberOfChars..]);
+                    sb.AppendLine(line.Substring(numberOfChars));
                     break;
                 case SpotInLine.End:
-                    sb.AppendLine(line[..(lineLength - numberOfChars)]);
+                    sb.AppendLine(line.Substring(0, lineLength - numberOfChars));
                     break;
                 default:
                     break;
@@ -819,7 +622,7 @@ public static partial class StringMethods
 
     public static string AddCharsToEachLine(this string stringToEdit, string stringToAdd, SpotInLine spotInLine)
     {
-        string[] splitString = stringToEdit.Split([System.Environment.NewLine], StringSplitOptions.None);
+        string[] splitString = stringToEdit.Split(new string[] { System.Environment.NewLine }, StringSplitOptions.None);
 
         if (splitString.Length > 1)
             if (splitString.LastOrDefault() == "")
@@ -846,7 +649,7 @@ public static partial class StringMethods
 
     public static string LimitCharactersPerLine(this string stringToEdit, int characterLimit, SpotInLine spotInLine)
     {
-        string[] splitString = stringToEdit.Split([System.Environment.NewLine], StringSplitOptions.None);
+        string[] splitString = stringToEdit.Split(new string[] { System.Environment.NewLine }, StringSplitOptions.None);
         StringBuilder returnStringBuilder = new();
         foreach (string line in splitString)
         {
@@ -857,8 +660,8 @@ public static partial class StringMethods
                 continue;
             }
 
-            if (spotInLine == SpotInLine.Beginning)
-                returnStringBuilder.AppendLine(line[..lineLimit]);
+            if (spotInLine== SpotInLine.Beginning)
+                returnStringBuilder.AppendLine(line.Substring(0, lineLimit));
             else
                 returnStringBuilder.AppendLine(line.Substring(line.Length - (lineLimit), lineLimit));
         }
@@ -870,7 +673,7 @@ public static partial class StringMethods
     {
         // Generated from ChatGPT
         // Use a regular expression to match the input against a pattern for a valid email address.
-        Regex regex = Email();
+        Regex regex = new(@"^[\w!#$%&'*+\-/=?\^_`{|}~]+(\.[\w!#$%&'*+\-/=?\^_`{|}~]+)*" + "@" + @"((([\-\w]+\.)+[a-zA-Z]{2,4})|(([0-9]{1,3}\.){3}[0-9]{1,3}))$");
         return regex.IsMatch(input);
     }
 
@@ -878,7 +681,7 @@ public static partial class StringMethods
     {
         // Basic Latin characters are those with Unicode code points
         // in the range U+0000 to U+007F (inclusive)
-        return c is >= '\u0000' and <= '\u007F';
+        return c >= '\u0000' && c <= '\u007F';
     }
 
     public static string GetCharactersToLeftOfNewLine(ref string mainString, int index, int numberOfCharacters)
@@ -886,7 +689,7 @@ public static partial class StringMethods
         int newLineIndex = GetNewLineIndexToLeft(ref mainString, index);
 
         if (newLineIndex < 1)
-            return mainString[..index];
+            return mainString.Substring(0, index);
 
         newLineIndex++;
 
@@ -906,13 +709,13 @@ public static partial class StringMethods
     {
         int newLineIndex = GetNewLineIndexToRight(ref mainString, index);
         if (newLineIndex < 1)
-            return mainString[index..];
+            return mainString.Substring(index);
 
         if (newLineIndex - index > numberOfCharacters)
             return string.Concat(mainString.AsSpan(index, numberOfCharacters), "...");
 
         if (newLineIndex == mainString.Length)
-            return mainString[index..];
+            return mainString.Substring(index);
 
         return string.Concat(mainString.AsSpan(index, newLineIndex - index), "...");
     }
@@ -941,253 +744,6 @@ public static partial class StringMethods
 
     public static bool EndsWithNewline(this string s)
     {
-        return NewlineEnding().IsMatch(s);
-    }
-
-    public static string RemoveNonWordChars(this string strIn)
-    {
-        // Replace invalid characters with empty strings.
-        try
-        {
-            return Regex.Replace(strIn, @"[^\w\s]", "",
-                                 RegexOptions.None, TimeSpan.FromSeconds(5));
-        }
-        // If we timeout when replacing invalid characters,
-        // we should return Empty.
-        catch (RegexMatchTimeoutException)
-        {
-            return String.Empty;
-        }
-    }
-
-    [GeneratedRegex(@"(\r\n|\n|\r)")]
-    private static partial Regex NewlineRegex();
-
-    [GeneratedRegex(@"\n$")]
-    private static partial Regex NewlineEnding();
-
-    [GeneratedRegex(@"^[\w!#$%&'*+\-/=?\^_`{|}~]+(\.[\w!#$%&'*+\-/=?\^_`{|}~]+)*@((([\-\w]+\.)+[a-zA-Z]{2,4})|(([0-9]{1,3}\.){3}[0-9]{1,3}))$")]
-    private static partial Regex Email();
-
-    [GeneratedRegex("[ ]{2,}")]
-    private static partial Regex MultiSpaces();
-
-    [GeneratedRegex(@"-+")]
-    private static partial Regex MultiDashes();
-
-    public static string ExplainRegexPattern(this string pattern)
-    {
-        StringBuilder explanation = new();
-        explanation.AppendLine($"Pattern: {pattern}");
-        explanation.AppendLine();
-
-        // Determine and explain overall case sensitivity
-        bool hasCaseInsensitiveFlag = pattern.Contains("(?i)");
-        bool hasCaseSensitiveFlag = pattern.Contains("(?-i)");
-
-        if (hasCaseInsensitiveFlag && !hasCaseSensitiveFlag)
-        {
-            explanation.AppendLine("Case Sensitivity: CASE-INSENSITIVE (matches regardless of uppercase/lowercase)");
-        }
-        else if (hasCaseSensitiveFlag && !hasCaseInsensitiveFlag)
-        {
-            explanation.AppendLine("Case Sensitivity: CASE-SENSITIVE (uppercase and lowercase must match exactly)");
-        }
-        else if (hasCaseInsensitiveFlag && hasCaseSensitiveFlag)
-        {
-            explanation.AppendLine("Case Sensitivity: MIXED (some parts case-insensitive, some case-sensitive)");
-        }
-        else
-        {
-            explanation.AppendLine("Case Sensitivity: DEFAULT (typically case-sensitive unless configured otherwise)");
-        }
-        explanation.AppendLine();
-
-        int i = 0;
-        while (i < pattern.Length)
-        {
-            char c = pattern[i];
-
-            if (c == '\\' && i + 1 < pattern.Length)
-            {
-                char next = pattern[i + 1];
-                switch (next)
-                {
-                    case 'b':
-                        explanation.AppendLine($"\\b - Word boundary");
-                        i += 2;
-                        break;
-                    case 'd':
-                        explanation.AppendLine($"\\d - Matches any digit (0-9)");
-                        i += 2;
-                        break;
-                    case 's':
-                        explanation.AppendLine($"\\s - Matches any whitespace character");
-                        i += 2;
-                        break;
-                    case 'w':
-                        explanation.AppendLine($"\\w - Matches any word character (letter, digit, or underscore)");
-                        i += 2;
-                        break;
-                    case 'S':
-                        explanation.AppendLine($"\\S - Matches any non-whitespace character");
-                        i += 2;
-                        break;
-                    case 'W':
-                        explanation.AppendLine($"\\W - Matches any non-word character");
-                        i += 2;
-                        break;
-                    case 'D':
-                        explanation.AppendLine($"\\D - Matches any non-digit");
-                        i += 2;
-                        break;
-                    default:
-                        explanation.AppendLine($"\\{next} - Escaped special character '{next}'");
-                        i += 2;
-                        break;
-                }
-            }
-            else if (c == '[')
-            {
-                int closeBracket = pattern.IndexOf(']', i);
-                if (closeBracket > i)
-                {
-                    string charClass = pattern.Substring(i, closeBracket - i + 1);
-                    explanation.AppendLine($"{charClass} - Character class: matches one of these characters");
-                    i = closeBracket + 1;
-                }
-                else
-                {
-                    i++;
-                }
-            }
-            else if (c == '{' && i + 1 < pattern.Length)
-            {
-                int closeBrace = pattern.IndexOf('}', i);
-                if (closeBrace > i)
-                {
-                    string quantifier = pattern.Substring(i, closeBrace - i + 1);
-                    explanation.AppendLine($"{quantifier} - Quantifier: repeat the previous element exactly this many times");
-                    i = closeBrace + 1;
-                }
-                else
-                {
-                    i++;
-                }
-            }
-            else if (c == '(')
-            {
-                int closeParen = pattern.IndexOf(')', i);
-                if (closeParen > i)
-                {
-                    string group = pattern.Substring(i, closeParen - i + 1);
-
-                    // Check if this is an inline modifier group
-                    if (group.StartsWith("(?i)"))
-                    {
-                        explanation.AppendLine($"{group} - Case-insensitive flag: following pattern ignores case (A matches a)");
-                    }
-                    else if (group.StartsWith("(?-i)"))
-                    {
-                        explanation.AppendLine($"{group} - Case-sensitive flag: following pattern is case-sensitive (A only matches A)");
-                    }
-                    else if (group.StartsWith("(?"))
-                    {
-                        // Other inline modifiers
-                        if (group.Contains('i'))
-                        {
-                            explanation.AppendLine($"{group} - Inline modifier (includes 'i' for case-insensitive matching)");
-                        }
-                        else if (group.Contains("-i"))
-                        {
-                            explanation.AppendLine($"{group} - Inline modifier (includes '-i' for case-sensitive matching)");
-                        }
-                        else
-                        {
-                            explanation.AppendLine($"{group} - Inline modifier group");
-                        }
-                    }
-                    else
-                    {
-                        explanation.AppendLine($"{group} - Capturing group");
-                    }
-                    i = closeParen + 1;
-                }
-                else
-                {
-                    i++;
-                }
-            }
-            else if (c == '+')
-            {
-                explanation.AppendLine($"+ - One or more of the previous element");
-                i++;
-            }
-            else if (c == '*')
-            {
-                explanation.AppendLine($"* - Zero or more of the previous element");
-                i++;
-            }
-            else if (c == '?')
-            {
-                explanation.AppendLine($"? - Zero or one of the previous element (optional)");
-                i++;
-            }
-            else if (c == '.')
-            {
-                explanation.AppendLine($". - Matches any single character");
-                i++;
-            }
-            else if (c == '^')
-            {
-                explanation.AppendLine($"^ - Start of line/string");
-                i++;
-            }
-            else if (c == '$')
-            {
-                explanation.AppendLine($"$ - End of line/string");
-                i++;
-            }
-            else
-            {
-                i++;
-            }
-        }
-
-        return explanation.ToString();
-    }
-
-    public static int CountMatches(string text, string pattern)
-    {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(pattern))
-            return 0;
-
-        int count = 0;
-        int index = 0;
-
-        while ((index = text.IndexOf(pattern, index, StringComparison.Ordinal)) != -1)
-        {
-            count++;
-            index += pattern.Length;
-        }
-
-        return count;
-    }
-
-    public static int CountRegexMatches(string text, string pattern)
-    {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(pattern))
-            return 0;
-
-        try
-        {
-            MatchCollection matches = Regex.Matches(text, pattern, RegexOptions.Multiline);
-            return matches.Count;
-        }
-        catch (Exception)
-        {
-            // If regex is invalid, return 0
-            return 0;
-        }
+        return Regex.IsMatch(s, @"\n$");
     }
 }

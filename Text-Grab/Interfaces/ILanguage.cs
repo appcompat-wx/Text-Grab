@@ -14,8 +14,6 @@ public interface ILanguage
 
     public string LanguageTag { get; }
 
-    public string DisplayName { get; }
-
     public LanguageLayoutDirection LayoutDirection { get; }
 
     public string NativeName { get; }
@@ -35,11 +33,11 @@ public interface ILanguage
 
     public static IList<string> GetMuiCompatibleLanguageListFromLanguageTags(IEnumerable<string> languageTags)
     {
-        return [];
+        return new List<string>();
     }
 
-    public IReadOnlyList<string> GetExtensionSubTags(string singleton)
+    public IReadOnlyList<string> GetExtensionSubtags(string singleton)
     {
-        return [];
+        return new List<string>();
     }
 }

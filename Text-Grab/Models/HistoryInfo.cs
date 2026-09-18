@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Text.Json.Serialization;
 using System.Windows;
-using Text_Grab.Interfaces;
 using Text_Grab.Utilities;
 using Windows.Globalization;
 
@@ -31,63 +30,21 @@ public class HistoryInfo : IEquatable<HistoryInfo>
 
     public string ImagePath { get; set; } = string.Empty;
 
-    public OpenContentKind SourceContentKind { get; set; } = OpenContentKind.Image;
-
-    public string SourcePath { get; set; } = string.Empty;
-
-    public int SourcePageIndex { get; set; }
-
-    [JsonIgnore]
-    public bool IsPdfDocument => SourceContentKind == OpenContentKind.PdfDocument;
-
     public bool IsTable { get; set; } = false;
 
     public double DpiScaleFactor { get; set; } = 1.0;
 
-    public FsgSelectionStyle SelectionStyle { get; set; } = FsgSelectionStyle.Region;
-
-    public string LanguageTag { get; set; } = string.Empty;
-
-    public LanguageKind LanguageKind { get; set; } = LanguageKind.Global;
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool UsedUiAutomation { get; set; }
-
-    public bool HasCalcPaneOpen { get; set; } = false;
-
-    public int CalcPaneWidth { get; set; } = 0;
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<double>? ManualTableColumnSeparators { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<double>? ManualTableRowSeparators { get; set; }
-
-    public EtwEditorMode EditorMode { get; set; } = EtwEditorMode.Text;
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? EditTextTableDocumentJson { get; set; }
+    public string LanguageTag { get; set; } = String.Empty;
 
     [JsonIgnore]
-    public ILanguage OcrLanguage
+    public Language OcrLanguage
     {
         get
         {
-            (string normalizedLanguageTag, LanguageKind normalizedLanguageKind, _) =
-                LanguageUtilities.NormalizePersistedLanguageIdentity(LanguageKind, LanguageTag, UsedUiAutomation);
+            if (string.IsNullOrWhiteSpace(LanguageTag))
+                return LanguageUtilities.GetCurrentInputLanguage();
 
-            if (string.IsNullOrWhiteSpace(normalizedLanguageTag))
-                return new GlobalLang(LanguageUtilities.GetCurrentInputLanguage().AsLanguage() ?? new Language("en-US"));
-
-            return normalizedLanguageKind switch
-            {
-                LanguageKind.Global => new GlobalLang(new Language(normalizedLanguageTag)),
-                LanguageKind.Tesseract => new TessLang(normalizedLanguageTag),
-                LanguageKind.WindowsAi => new WindowsAiLang(),
-                LanguageKind.WindowsAiDescription => new WindowsAiDescriptionLang(),
-                LanguageKind.UiAutomation => CaptureLanguageUtilities.GetUiAutomationFallbackLanguage(),
-                _ => new GlobalLang(LanguageUtilities.GetCurrentInputLanguage().AsLanguage() ?? new Language("en-US")),
-            };
+            return new Language(LanguageTag);
         }
     }
 
@@ -112,39 +69,13 @@ public class HistoryInfo : IEquatable<HistoryInfo>
 
     public string TextContent { get; set; } = string.Empty;
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? WordBorderInfoJson { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? WordBorderInfoFileName { get; set; }
+    public string WordBorderInfoJson { get; set; } = string.Empty;
 
     public string RectAsString { get; set; } = string.Empty;
 
     #endregion Properties
 
     #region Public Methods
-
-    /// <summary>
-    /// Returns a shallow copy of this instance. Reference-typed members (e.g.
-    /// <see cref="ImageContent"/>, the separator lists) are shared, not cloned — callers
-    /// that only need to tweak value/string fields without mutating the original should use this.
-    /// </summary>
-    public HistoryInfo ShallowCopy() => (HistoryInfo)MemberwiseClone();
-
-    public void ClearTransientImage()
-    {
-        // Do not Dispose() here — the bitmap may still be in use by a
-        // fire-and-forget SaveImageFile task (the packaged path is async).
-        // Nulling the reference lets the GC collect once all consumers finish.
-        // The HistoryService.DisposeCachedBitmap() path handles deterministic
-        // cleanup of the captured fullscreen bitmap via its GDI handle.
-        ImageContent = null;
-    }
-
-    public void ClearTransientWordBorderData()
-    {
-        WordBorderInfoJson = null;
-    }
 
     public static bool operator !=(HistoryInfo? left, HistoryInfo? right)
     {

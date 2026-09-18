@@ -10,40 +10,10 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!--  TODO: Remove this when proper theme setting is fixed  -->
-                <ResourceDictionary>
-                    <Color
-                        x:Key="SystemAccentColor"
-                        A="255"
-                        B="152"
-                        G="142"
-                        R="48" />
-                    <Color
-                        x:Key="SystemAccentColorPrimary"
-                        A="255"
-                        B="152"
-                        G="142"
-                        R="48" />
-                    <Color
-                        x:Key="SystemAccentColorSecondary"
-                        A="255"
-                        B="152"
-                        G="142"
-                        R="48" />
-                    <Color
-                        x:Key="SystemAccentColorTertiary"
-                        A="255"
-                        B="152"
-                        G="142"
-                        R="48" />
-
-                </ResourceDictionary>
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
-                <ResourceDictionary Source="/Styles/ListViewScrollFix.xaml" />
                 <ResourceDictionary Source="/Styles/Colors.xaml" />
                 <ResourceDictionary Source="/Styles/TextStyles.xaml" />
-                <ResourceDictionary Source="/Styles/SettingsStyles.xaml" />
                 <ResourceDictionary Source="/Styles/ButtonStyles.xaml" />
                 <ResourceDictionary Source="/Styles/TextBoxStyles.xaml" />
                 <ResourceDictionary Source="/Styles/GridViewStyles.xaml" />

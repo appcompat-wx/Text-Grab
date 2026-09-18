@@ -131,7 +131,8 @@ public class WrappingStream : Stream
     {
         ThrowIfDisposed();
 
-        m_streamBase?.EndWrite(asyncResult);
+        if (m_streamBase is not null)
+            m_streamBase.EndWrite(asyncResult);
     }
 
     /// <summary>
@@ -141,7 +142,8 @@ public class WrappingStream : Stream
     {
         ThrowIfDisposed();
 
-        m_streamBase?.Flush();
+        if (m_streamBase is not null)
+            m_streamBase.Flush();
     }
 
     /// <summary>
@@ -195,7 +197,8 @@ public class WrappingStream : Stream
     {
         ThrowIfDisposed();
 
-        m_streamBase?.SetLength(value);
+        if (m_streamBase is not null)
+            m_streamBase.SetLength(value);
     }
 
     /// <summary>
@@ -206,7 +209,8 @@ public class WrappingStream : Stream
     {
         ThrowIfDisposed();
 
-        m_streamBase?.Write(buffer, offset, count);
+        if (m_streamBase is not null)
+            m_streamBase.Write(buffer, offset, count);
     }
 
     /// <summary>
@@ -216,7 +220,8 @@ public class WrappingStream : Stream
     {
         ThrowIfDisposed();
 
-        m_streamBase?.WriteByte(value);
+        if (m_streamBase is not null)
+            m_streamBase.WriteByte(value);
     }
 
     /// <summary>
@@ -248,6 +253,5 @@ public class WrappingStream : Stream
         if (m_streamBase == null)
             throw new ObjectDisposedException(GetType().Name);
     }
-
-    private Stream? m_streamBase;
+    Stream? m_streamBase;
 }

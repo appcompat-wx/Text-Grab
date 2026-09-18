@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using Text_Grab.Models;
 using Text_Grab.Properties;
 using Text_Grab.Utilities;
 using Windows.ApplicationModel;
@@ -20,27 +18,26 @@ public partial class GeneralSettings : Page
 {
     #region Fields
 
-    private readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
+    private readonly Settings DefaultSettings = Settings.Default;
     private readonly Brush BadBrush = new SolidColorBrush(Colors.Red);
     private readonly Brush GoodBrush = new SolidColorBrush(Colors.Transparent);
     private double InsertDelaySeconds = 1.5;
-    private bool settingsSet = false;
 
     #endregion Fields
+
 
     public GeneralSettings()
     {
         InitializeComponent();
 
-        if (!AppUtilities.IsPackaged())
-            OpenExeFolderButton.Visibility = Visibility.Visible;
 
-        VersionTextblock.Text = $"Version {AppUtilities.GetAppVersion()}";
+        if (!ImplementAppOptions.IsPackaged())
+            OpenExeFolderButton.Visibility = Visibility.Visible;
     }
 
     private void OpenExeFolderButton_Click(object sender, RoutedEventArgs args)
     {
-        if (Path.GetDirectoryName(FileUtilities.GetExePath()) is not string exePath)
+        if (Path.GetDirectoryName(AppContext.BaseDirectory) is not string exePath)
             return;
 
         Uri source = new(exePath, UriKind.Absolute);
@@ -57,7 +54,7 @@ public partial class GeneralSettings : Page
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
         AppTheme appTheme = Enum.Parse<AppTheme>(DefaultSettings.AppTheme, true);
-        switch (appTheme)
+        switch (AppTheme.Light)
         {
             case AppTheme.System:
                 SystemThemeRdBtn.IsChecked = true;
@@ -93,7 +90,7 @@ public partial class GeneralSettings : Page
                 break;
         }
 
-        if (AppUtilities.IsPackaged())
+        if (ImplementAppOptions.IsPackaged())
         {
             StartupTask startupTask = await StartupTask.GetAsync("StartTextGrab");
 
@@ -108,8 +105,7 @@ public partial class GeneralSettings : Page
                     StartupOnLoginCheckBox.IsChecked = false;
                     StartupOnLoginCheckBox.IsEnabled = false;
 
-                    StartupTextBlock.Text = "Auto start is disabled in Task Manager";
-                    StartupTextBlock.Visibility = Visibility.Visible;
+                    StartupTextBlock.Text += "\nDisabled in Task Manager";
                     break;
                 case StartupTaskState.Enabled:
                     StartupOnLoginCheckBox.IsChecked = true;
@@ -118,50 +114,24 @@ public partial class GeneralSettings : Page
         }
         else
         {
-            StartupOnLoginCheckBox.IsChecked = DefaultSettings.StartupOnLogin;
+            StartupOnLoginCheckBox.IsChecked = Settings.Default.StartupOnLogin;
         }
 
-        List<WebSearchUrlModel> searcherSettings = Singleton<WebSearchUrlModel>.Instance.WebSearchers;
-
-        WebSearchersComboBox.Items.Clear();
-        foreach (WebSearchUrlModel searcher in searcherSettings)
-            WebSearchersComboBox.Items.Add(searcher);
-
-        WebSearchersComboBox.SelectedItem = Singleton<WebSearchUrlModel>.Instance.DefaultSearcher;
-
         ShowToastCheckBox.IsChecked = DefaultSettings.ShowToast;
-
         RunInBackgroundChkBx.IsChecked = DefaultSettings.RunInTheBackground;
         ReadBarcodesBarcode.IsChecked = DefaultSettings.TryToReadBarcodes;
-        HdrCaptureCorrectionToggle.IsChecked = DefaultSettings.HdrCaptureCorrection;
         HistorySwitch.IsChecked = DefaultSettings.UseHistory;
         ErrorCorrectBox.IsChecked = DefaultSettings.CorrectErrors;
         CorrectToLatin.IsChecked = DefaultSettings.CorrectToLatin;
-        ParagraphDetectionToggle.IsChecked = DefaultSettings.ParagraphDetection;
         NeverUseClipboardChkBx.IsChecked = DefaultSettings.NeverAutoUseClipboard;
         TryInsertCheckbox.IsChecked = DefaultSettings.TryInsert;
         InsertDelaySeconds = DefaultSettings.InsertDelay;
         SecondsTextBox.Text = InsertDelaySeconds.ToString("##.#", System.Globalization.CultureInfo.InvariantCulture);
-        // Context menu integration - only available for unpackaged apps
-        if (!AppUtilities.IsPackaged())
-        {
-            AddToContextMenuCheckBox.IsChecked = ContextMenuUtilities.IsRegisteredInContextMenu();
-            RegisterOpenWithCheckBox.IsChecked = DefaultSettings.RegisterOpenWith;
-        }
-        else
-        {
-            AddToContextMenuCheckBox.IsEnabled = false;
-            AddToContextMenuCheckBox.IsChecked = false;
-            RegisterOpenWithCheckBox.IsEnabled = false;
-            RegisterOpenWithCheckBox.IsChecked = false;
-        }
-
-        settingsSet = true;
     }
 
     private void ValidateTextIsNumber(object sender, TextChangedEventArgs e)
     {
-        if (!settingsSet)
+        if (!IsLoaded)
             return;
 
         if (sender is System.Windows.Controls.TextBox numberInputBox)
@@ -185,353 +155,130 @@ public partial class GeneralSettings : Page
 
     private void FullScreenRDBTN_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.DefaultLaunch = TextGrabMode.Fullscreen.ToString();
     }
 
     private void GrabFrameRDBTN_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.DefaultLaunch = TextGrabMode.GrabFrame.ToString();
     }
 
     private void EditTextRDBTN_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.DefaultLaunch = TextGrabMode.EditText.ToString();
     }
 
     private void QuickLookupRDBTN_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.DefaultLaunch = TextGrabMode.QuickLookup.ToString();
     }
 
     private void RunInBackgroundChkBx_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         if (sender is not ToggleSwitch runInBackgroundSwitch)
             return;
 
         DefaultSettings.RunInTheBackground = runInBackgroundSwitch.IsChecked is true;
         ImplementAppOptions.ImplementBackgroundOption(DefaultSettings.RunInTheBackground);
-        DefaultSettings.Save();
     }
 
     private void SystemThemeRdBtn_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.AppTheme = AppTheme.System.ToString();
         App.SetTheme();
     }
 
     private void LightThemeRdBtn_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.AppTheme = AppTheme.Light.ToString();
         App.SetTheme();
     }
 
     private void DarkThemeRdBtn_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.AppTheme = AppTheme.Dark.ToString();
         App.SetTheme();
     }
 
     private void ReadBarcodesBarcode_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.TryToReadBarcodes = true;
     }
 
     private void ReadBarcodesBarcode_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.TryToReadBarcodes = false;
-    }
-
-    private void HdrCaptureCorrectionToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        DefaultSettings.HdrCaptureCorrection = true;
-    }
-
-    private void HdrCaptureCorrectionToggle_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        DefaultSettings.HdrCaptureCorrection = false;
-    }
-
-    private async void CheckHdrPermissionButton_Click(object sender, RoutedEventArgs e)
-    {
-        CheckHdrPermissionButton.IsEnabled = false;
-
-        Windows.Security.Authorization.AppCapabilityAccess.AppCapabilityAccessStatus status =
-            await Utilities.Hdr.HdrScreenCapture.RequestBorderlessAccessAsync();
-
-        CheckHdrPermissionButton.IsEnabled = true;
-
-        bool allowed = status == Windows.Security.Authorization.AppCapabilityAccess.AppCapabilityAccessStatus.Allowed;
-        DefaultSettings.HdrBorderlessGranted = allowed;
-        DefaultSettings.Save();
-
-        string message = status switch
-        {
-            Windows.Security.Authorization.AppCapabilityAccess.AppCapabilityAccessStatus.Allowed
-                => "Borderless capture is allowed. The yellow capture border will no longer appear.",
-            Windows.Security.Authorization.AppCapabilityAccess.AppCapabilityAccessStatus.DeniedByUser
-                => "Borderless capture was denied. You can allow it in Windows Settings under Privacy & security → Graphics capture (or the consent prompt).",
-            Windows.Security.Authorization.AppCapabilityAccess.AppCapabilityAccessStatus.DeniedBySystem
-                => "Borderless capture is blocked on this system, so the capture border can't be removed.",
-            _ => "Borderless capture permission is currently unavailable.",
-        };
-
-        await new Wpf.Ui.Controls.MessageBox
-        {
-            Title = "HDR Capture Permission",
-            Content = message,
-            CloseButtonText = "OK"
-        }.ShowDialogAsync();
     }
 
     private void HistorySwitch_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.UseHistory = true;
     }
 
     private void HistorySwitch_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.UseHistory = false;
     }
 
     private void ErrorCorrectBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.CorrectErrors = true;
     }
 
     private void ErrorCorrectBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.CorrectErrors = false;
-    }
-
-    private void ParagraphDetectionToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        DefaultSettings.ParagraphDetection = true;
-    }
-
-    private void ParagraphDetectionToggle_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        DefaultSettings.ParagraphDetection = false;
     }
 
     private void CorrectToLatin_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.CorrectToLatin = true;
     }
 
     private void CorrectToLatin_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.CorrectToLatin = false;
     }
 
     private void NeverUseClipboardChkBx_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.NeverAutoUseClipboard = true;
     }
 
     private void NeverUseClipboardChkBx_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.NeverAutoUseClipboard = false;
     }
 
     private async void StartupOnLoginCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.StartupOnLogin = true;
         await ImplementAppOptions.ImplementStartupOption(true);
     }
 
     private async void StartupOnLoginCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.StartupOnLogin = false;
         await ImplementAppOptions.ImplementStartupOption(false);
     }
 
     private void TryInsertCheckbox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.TryInsert = true;
     }
 
     private void TryInsertCheckbox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.TryInsert = false;
     }
 
     private void ShowToastCheckBox_Checked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.ShowToast = true;
     }
 
     private void ShowToastCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
-        if (!settingsSet)
-            return;
-
         DefaultSettings.ShowToast = false;
-    }
-
-    private void WebSearchersComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!settingsSet
-            || sender is not ComboBox comboBox
-            || comboBox.SelectedItem is not WebSearchUrlModel newDefault)
-            return;
-
-        Singleton<WebSearchUrlModel>.Instance.DefaultSearcher = newDefault;
-    }
-
-    private async void AddToContextMenuCheckBox_Checked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        bool success = ContextMenuUtilities.AddToContextMenu(out string? errorMessage);
-        if (success)
-        {
-            DefaultSettings.AddToContextMenu = true;
-            DefaultSettings.Save();
-        }
-        else
-        {
-            // Revert the checkbox if registration failed
-            settingsSet = false;
-            AddToContextMenuCheckBox.IsChecked = false;
-            settingsSet = true;
-
-            // Show error message to user
-            await new Wpf.Ui.Controls.MessageBox
-            {
-                Title = "Context Menu Registration Failed",
-                Content = errorMessage ?? "Failed to add Text Grab to the context menu.",
-                CloseButtonText = "OK"
-            }.ShowDialogAsync();
-        }
-    }
-
-    private async void AddToContextMenuCheckBox_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        bool success = ContextMenuUtilities.RemoveFromContextMenu(out string? errorMessage);
-
-        if (success)
-        {
-            DefaultSettings.AddToContextMenu = false;
-            DefaultSettings.Save();
-        }
-        else
-        {
-            // Revert the checkbox since removal failed - the context menu is still registered
-            settingsSet = false;
-            AddToContextMenuCheckBox.IsChecked = true;
-            settingsSet = true;
-
-            await new Wpf.Ui.Controls.MessageBox
-            {
-                Title = "Context Menu Removal Failed",
-                Content = errorMessage ?? "Some context menu entries could not be removed.",
-                CloseButtonText = "OK"
-            }.ShowDialogAsync();
-        }
-    }
-
-    private void RegisterOpenWithCheckBox_Checked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        ImplementAppOptions.RegisterAsImageOpenWithApp();
-        DefaultSettings.RegisterOpenWith = true;
-        DefaultSettings.Save();
-    }
-
-    private void RegisterOpenWithCheckBox_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (!settingsSet)
-            return;
-
-        ImplementAppOptions.UnregisterAsImageOpenWithApp();
-        DefaultSettings.RegisterOpenWith = false;
-        DefaultSettings.Save();
     }
 }

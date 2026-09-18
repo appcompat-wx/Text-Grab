@@ -1,8 +1,7 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
-internal static partial class OSInterop
+static partial class OSInterop
 {
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int smIndex);
@@ -25,42 +24,6 @@ internal static partial class OSInterop
     [DllImport("user32.dll")]
     public static extern bool ClipCursor([In()] IntPtr lpRect);
 
-    [DllImport("user32.dll")]
-    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    public static extern int GetWindowTextLength(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool IsWindowVisible(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetShellWindow();
-
-    [DllImport("user32.dll")]
-    public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll")]
-    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-    [DllImport("dwmapi.dll")]
-    public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
-
-    [DllImport("dwmapi.dll")]
-    public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
-
     public struct RECT
     {
         public int left;
@@ -75,8 +38,8 @@ internal static partial class OSInterop
     public class MONITORINFOEX
     {
         public int cbSize = Marshal.SizeOf(typeof(MONITORINFOEX));
-        public RECT rcMonitor = new();
-        public RECT rcWork = new();
+        public RECT rcMonitor = new RECT();
+        public RECT rcWork = new RECT();
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
         public char[] szDevice = new char[32];
         public int dwFlags;
@@ -92,8 +55,6 @@ internal static partial class OSInterop
     public const int WM_HOTKEY = 0x0312;
     public const int WM_KEYDOWN = 0x0100;
     public const int WM_KEYUP = 0x0101;
-
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -1282,11 +1243,5 @@ internal static partial class OSInterop
         /// Additional information associated with the message.
         /// </summary>
         public IntPtr AdditionalInformation;
-    }
-
-    public static bool IsWindows10()
-    {
-        int build = Environment.OSVersion.Version.Build;
-        return build < 22000;
     }
 }

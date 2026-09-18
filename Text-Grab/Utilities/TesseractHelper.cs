@@ -30,9 +30,6 @@ public static class TesseractHelper
     private const string rawProgramsPath = @"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe";
     private const string basicPath = @"C:\Program Files\Tesseract-OCR\tesseract.exe";
 
-    private static readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
-
-
     public static bool CanLocateTesseractExe()
     {
         string tesseractPath = string.Empty;
@@ -52,31 +49,31 @@ public static class TesseractHelper
 
     private static string GetTesseractPath()
     {
-        if (!string.IsNullOrWhiteSpace(DefaultSettings.TesseractPath)
-            && File.Exists(DefaultSettings.TesseractPath))
-            return DefaultSettings.TesseractPath;
+        if (!string.IsNullOrWhiteSpace(Settings.Default.TesseractPath)
+            && File.Exists(Settings.Default.TesseractPath))
+            return Settings.Default.TesseractPath;
 
         string tesExePath = Environment.ExpandEnvironmentVariables(rawPath);
         string programsPath = Environment.ExpandEnvironmentVariables(rawProgramsPath);
 
         if (File.Exists(tesExePath))
         {
-            DefaultSettings.TesseractPath = tesExePath;
-            DefaultSettings.Save();
+            Settings.Default.TesseractPath = tesExePath;
+            Settings.Default.Save();
             return tesExePath;
         }
 
         if (File.Exists(programsPath))
         {
-            DefaultSettings.TesseractPath = programsPath;
-            DefaultSettings.Save();
+            Settings.Default.TesseractPath = programsPath;
+            Settings.Default.Save();
             return programsPath;
         }
 
         if (File.Exists(basicPath))
         {
-            DefaultSettings.TesseractPath = basicPath;
-            DefaultSettings.Save();
+            Settings.Default.TesseractPath = basicPath;
+            Settings.Default.Save();
             return basicPath;
         }
 
@@ -106,17 +103,18 @@ public static class TesseractHelper
         return result.StandardOutput;
     }
 
-    public static async Task<OcrOutput> GetOcrOutputFromBitmap(Bitmap bmp, TessLang language)
+    public static async Task<OcrOutput> GetOcrOutputFromBitmap(Bitmap bmp, Windows.Globalization.Language language, string tessTag = "")
     {
         bmp.Save(TesseractHelper.TempImagePath(), ImageFormat.Png);
+        if (string.IsNullOrWhiteSpace(tessTag))
+            tessTag = language.LanguageTag;
 
         OcrOutput ocrOutput = new()
         {
             Engine = OcrEngineKind.Tesseract,
             Kind = OcrOutputKind.Paragraph,
-            Language = language,
             SourceBitmap = bmp,
-            RawOutput = await TesseractHelper.GetTextFromImagePathAsync(TempImagePath(), language.RawTag)
+            RawOutput = await TesseractHelper.GetTextFromImagePathAsync(TempImagePath(), tessTag)
         };
         ocrOutput.CleanOutput();
 
@@ -173,9 +171,6 @@ public static class TesseractHelper
 
     public static string TempImagePath()
     {
-        if (AutomationProfile.Current is not null)
-            return Path.Combine(AutomationProfile.GetTemporaryDirectory(), "tempImage.png");
-
         string? exePath = Path.GetDirectoryName(System.AppContext.BaseDirectory);
         if (exePath is null)
         {
@@ -186,7 +181,7 @@ public static class TesseractHelper
         return $"{exePath}\\tempImage.png";
     }
 
-    public static async Task<List<string>> TesseractLanguagesAsStrings()
+    public async static Task<List<string>> TesseractLanguagesAsStrings()
     {
         List<string> languageStrings = new();
 
@@ -219,7 +214,7 @@ public static class TesseractHelper
         return languageStrings;
     }
 
-    public static async Task<List<ILanguage>> TesseractLanguages()
+    public async static Task<List<ILanguage>> TesseractLanguages()
     {
         List<string> languageStrings = await TesseractLanguagesAsStrings();
         List<ILanguage> tesseractLanguages = new();

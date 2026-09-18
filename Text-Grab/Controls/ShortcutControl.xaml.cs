@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -40,8 +40,10 @@ public partial class ShortcutControl : UserControl
 
     public static readonly DependencyProperty ShortcutNameProperty =
         DependencyProperty.Register("ShortcutName", typeof(string), typeof(ShortcutControl), new PropertyMetadata("shortcutName"));
-    private bool isRecording = false;
-    private string previousSequence = string.Empty;
+
+    bool isRecording = false;
+
+    string previousSequence = string.Empty;
     public bool HasModifier { get; set; } = false;
     public bool HasLetter { get; set; } = false;
 
@@ -97,17 +99,6 @@ public partial class ShortcutControl : UserControl
     public ShortcutControl()
     {
         InitializeComponent();
-    }
-
-    private void ShortcutControl_Loaded(object sender, RoutedEventArgs e)
-    {
-        string automationId = AutomationProperties.GetAutomationId(this);
-        if (string.IsNullOrWhiteSpace(automationId))
-            return;
-
-        AutomationProperties.SetAutomationId(IsEnabledToggleSwitch, $"{automationId}.Enabled");
-        AutomationProperties.SetAutomationId(RecordingToggleButton, $"{automationId}.Record");
-        AutomationProperties.SetAutomationId(ErrorText, $"{automationId}.Error");
     }
 
     public void GoIntoErrorMode(string errorMessage = "")

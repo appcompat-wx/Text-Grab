@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows;
 using Text_Grab.Pages;
+using Text_Grab.Properties;
 using Text_Grab.Utilities;
 
 namespace Text_Grab;
@@ -16,6 +17,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
     {
         InitializeComponent();
         App.SetTheme();
+
     }
 
     #endregion Constructors
@@ -24,7 +26,7 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
 
     private void Window_Closed(object? sender, EventArgs e)
     {
-        AppUtilities.TextGrabSettings.Save();
+        Settings.Default.Save();
 
         if (App.Current is App app)
             NotifyIconUtilities.RegisterHotKeys(app);
@@ -39,6 +41,6 @@ public partial class SettingsWindow : Wpf.Ui.Controls.FluentWindow
         if (App.Current is App app)
             NotifyIconUtilities.UnregisterHotkeys(app);
     }
-
     #endregion Methods
 }
+

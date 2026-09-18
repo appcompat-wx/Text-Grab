@@ -1,13 +1,10 @@
-﻿using CliWrap;
-using CliWrap.Buffered;
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,25 +13,23 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Text_Grab.Models;
 using Text_Grab.Properties;
-using Text_Grab.Services;
 using Text_Grab.Utilities;
 
 namespace Text_Grab.Views;
 
+/// <summary>
+/// Interaction logic for QuickSimpleLookup.xaml
+/// </summary>
 public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 {
     #region Fields
 
     public TextBox? DestinationTextBox;
-    private readonly string cacheFilename = "QuickSimpleLookupCache.csv";
+    private string cacheFilename = "QuickSimpleLookupCache.csv";
     private bool isPuttingValueIn = false;
     private LookupItem? lastSelection;
     private int rowCount = 0;
     private string valueUnderEdit = string.Empty;
-    private LookupItem? itemUnderEdit;
-    private static readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
-    private List<LookupItem> lookupItems = [];
-
     #endregion Fields
 
     #region Constructors
@@ -45,21 +40,13 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         App.SetTheme();
     }
 
-    private async void SearchBar_SearchChanged(object? sender, EventArgs e)
-    {
-        if (!IsLoaded)
-            return;
-
-        await ReSearch(SearchBar.TextBox.Text);
-    }
-
     #endregion Constructors
 
     #region Properties
 
     public bool IsEditingDataGrid { get; set; } = false;
     public bool IsFromETW { get; set; } = false;
-    public List<LookupItem> ItemsDictionary { get; set; } = [];
+    public List<LookupItem> ItemsDictionary { get; set; } = new();
 
     #endregion Properties
 
@@ -67,38 +54,20 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private static LookupItem ParseStringToLookupItem(char splitChar, string row)
     {
-        LookupItemKind kind = LookupItemKind.Simple;
-        if (row.StartsWith('>'))
-        {
-            kind = LookupItemKind.Command;
-        }
-        else if (row.StartsWith("http"))
-            kind = LookupItemKind.Link;
-        else if (row.StartsWith("🔗"))
-        {
-            kind = LookupItemKind.Link;
-        }
-        else if (row.StartsWith('⚡'))
-        {
-            kind = LookupItemKind.Dynamic;
-        }
+        List<string> cells = row.Split(splitChar).ToList();
+        LookupItem newRow = new LookupItem();
+        if (cells.FirstOrDefault() is String firstCell)
+            newRow.shortValue = firstCell;
 
-        List<string> cells = [.. row.Split(splitChar)];
-        LookupItem newRow = new();
-        if (cells.FirstOrDefault() is string firstCell)
-            newRow.ShortValue = firstCell;
-
-        newRow.LongValue = "";
-        if (cells.Count > 1 && cells[1] is not null)
-            newRow.LongValue = string.Join(" ", cells.Skip(1).ToArray());
-
-        newRow.Kind = kind;
+        newRow.longValue = "";
+        if (cells.Count > 1 && cells[1] is String)
+            newRow.longValue = String.Join(" ", cells.Skip(1).ToArray());
         return newRow;
     }
 
     private static IEnumerable<LookupItem> ParseStringToRows(string clipboardContent, bool isCSV = false)
     {
-        List<string> rows = [.. clipboardContent.Split(Environment.NewLine)];
+        List<string> rows = clipboardContent.Split(Environment.NewLine).ToList();
 
         char splitChar = isCSV ? ',' : '\t';
 
@@ -113,7 +82,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private void AddItemBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SearchBar.TextBox is not TextBox searchTextBox)
+        if (SearchBox is not TextBox searchTextBox)
             return;
 
         AddToLookUpResults('\t', searchTextBox.Text);
@@ -127,7 +96,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         MainDataGrid.ItemsSource = null;
         ItemsDictionary.Add(newItem);
-        lookupItems.Add(newItem);
+        MainDataGrid.ItemsSource = ItemsDictionary;
 
         UpdateRowCount();
         MainDataGrid.ScrollIntoView(ItemsDictionary.LastOrDefault());
@@ -137,7 +106,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private void ClearOrExit()
     {
-        if (string.IsNullOrEmpty(SearchBar.TextBox.Text))
+        if (string.IsNullOrEmpty(SearchBox.Text))
         {
             this.Close();
             return;
@@ -145,8 +114,8 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         lastSelection = GetMainDataGridSelection().FirstOrDefault();
 
-        SearchBar.TextBox.Clear();
-        SearchBar.TextBox.Focus();
+        SearchBox.Clear();
+        SearchBox.Focus();
     }
 
     private void EditingTextBox_Loaded(object sender, RoutedEventArgs e)
@@ -177,7 +146,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         if (IsEditingDataGrid)
             return;
         e.Handled = true;
-        if (SearchBar.TextBox is TextBox searchTextBox && searchTextBox.Text.Contains('\t'))
+        if (SearchBox is TextBox searchTextBox && searchTextBox.Text.Contains('\t'))
         {
             AddToLookUpResults('\t', searchTextBox.Text);
             searchTextBox.Clear();
@@ -215,10 +184,11 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private List<LookupItem> GetMainDataGridSelection()
     {
-        if (MainDataGrid.SelectedItems is not List<LookupItem> selectedItems
-            || selectedItems.Count == 0)
+        var selectedItems = MainDataGrid.SelectedItems as List<LookupItem>;
+
+        if (selectedItems is null || selectedItems.Count == 0)
         {
-            selectedItems = [];
+            selectedItems = new List<LookupItem>();
             if (MainDataGrid.SelectedItem is not LookupItem selectedLookupItem)
                 return selectedItems;
 
@@ -255,7 +225,6 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
     private void MainDataGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
     {
         IsEditingDataGrid = true;
-        itemUnderEdit = e.Row.Item as LookupItem;
     }
 
     private void MainDataGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
@@ -263,29 +232,9 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         IsEditingDataGrid = false;
 
         if (e.EditAction == DataGridEditAction.Cancel)
-        {
-            itemUnderEdit = null;
             return;
-        }
 
-        LookupItem? editedRow = e.Row.Item as LookupItem;
-        int prevIndex = -1;
-
-        if (itemUnderEdit is not null)
-        {
-            prevIndex = lookupItems.IndexOf(itemUnderEdit);
-            lookupItems.Remove(itemUnderEdit);
-        }
-
-        if (editedRow is not null)
-        {
-            if (prevIndex > -1)
-                lookupItems.Insert(prevIndex, editedRow);
-            else
-                lookupItems.Add(editedRow);
-        }
-
-        DependencyObject child = VisualTreeHelper.GetChild(e.EditingElement, 0);
+        var child = VisualTreeHelper.GetChild(e.EditingElement, 0);
         if (child is TextBox editedBox
             && valueUnderEdit != editedBox.Text)
         {
@@ -298,7 +247,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
     private void MainDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (MainDataGrid.ItemsSource is List<LookupItem> list
-            && string.IsNullOrEmpty(SearchBar.TextBox.Text)
+            && string.IsNullOrEmpty(SearchBox.Text)
             && list.Count < rowCount)
         {
             // A row has been deleted
@@ -309,7 +258,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private void NewFullscreen_Click(object sender, RoutedEventArgs e)
     {
-        WindowUtilities.LaunchFullScreenGrab(SearchBar.TextBox);
+        WindowUtilities.LaunchFullScreenGrab(SearchBox);
     }
 
     private void ParseBTN_Click(object sender, RoutedEventArgs e)
@@ -332,13 +281,12 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
     private async void ParseCSVFileMenuItem_Click(object sender, RoutedEventArgs e)
     {
         // Create OpenFileDialog 
-        OpenFileDialog dlg = new()
-        {
-            // Set filter for file extension and default file extension 
-            DefaultExt = ".csv",
-            Filter = "Comma Separated Values File (.csv)|*.csv",
-            CheckFileExists = true
-        };
+        Microsoft.Win32.OpenFileDialog dlg = new Microsoft.Win32.OpenFileDialog();
+
+        // Set filter for file extension and default file extension 
+        dlg.DefaultExt = ".csv";
+        dlg.Filter = "Comma Separated Values File (.csv)|*.csv";
+        dlg.CheckFileExists = true;
 
         bool? result = dlg.ShowDialog();
 
@@ -347,7 +295,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         string csvToOpenPath = dlg.FileName;
 
-        await LoadDataGridContent(csvToOpenPath);
+        await ReadCsvFileIntoQuickSimpleLookup(csvToOpenPath);
         SaveBTN.Visibility = Visibility.Visible;
     }
 
@@ -360,34 +308,33 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private async void PickSaveLocation_Click(object sender, RoutedEventArgs e)
     {
-        SaveFileDialog dlg = new()
-        {
-            AddExtension = true,
-            DefaultExt = ".csv",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            FileName = "QuickSimpleLookupDataFile.csv",
-            OverwritePrompt = false
-        };
+        SaveFileDialog dlg = new();
 
-        if (!string.IsNullOrEmpty(DefaultSettings.LookupFileLocation))
+        dlg.AddExtension = true;
+        dlg.DefaultExt = ".csv";
+        dlg.InitialDirectory = "C:\\";
+        dlg.FileName = "QuickSimpleLookupDataFile.csv";
+        dlg.OverwritePrompt = false;
+
+        if (!string.IsNullOrEmpty(Settings.Default.LookupFileLocation))
         {
-            dlg.InitialDirectory = Path.GetDirectoryName(DefaultSettings.LookupFileLocation);
-            dlg.FileName = Path.GetFileName(DefaultSettings.LookupFileLocation);
+            dlg.InitialDirectory = Settings.Default.LookupFileLocation;
+            dlg.FileName = Path.GetFileName(Settings.Default.LookupFileLocation);
         }
 
-        bool? result = dlg.ShowDialog();
+        var result = dlg.ShowDialog();
 
         if (result is false)
             return;
 
-        DefaultSettings.LookupFileLocation = dlg.FileName;
-        DefaultSettings.Save();
+        Settings.Default.LookupFileLocation = dlg.FileName;
+        Settings.Default.Save();
 
         if (File.Exists(dlg.FileName))
         {
             // clear and load the new file
             ItemsDictionary.Clear();
-            await LoadDataGridContent(dlg.FileName);
+            await ReadCsvFileIntoQuickSimpleLookup(dlg.FileName);
         }
         else
             await WriteDataToCSV();
@@ -395,28 +342,16 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private void PopulateSampleData()
     {
-        LookupItem sampleItem1 = new("This is the key", "This is the value you want to copy quickly")
-        {
-            Kind = LookupItemKind.Simple
-        };
+        LookupItem sampleItem1 = new("This is the key", "This is the value you want to copy quickly");
         ItemsDictionary.Add(sampleItem1);
 
-        LookupItem sampleItem2 = new("Import data", "From a copied Excel table, or import from a CSV File")
-        {
-            Kind = LookupItemKind.Simple
-        };
+        LookupItem sampleItem2 = new("Import data", "From a copied Excel table, or import from a CSV File");
         ItemsDictionary.Add(sampleItem2);
 
-        LookupItem sampleItem3 = new("You can change save location", "Putting the data store location in OneDrive it will sync across devices")
-        {
-            Kind = LookupItemKind.Simple
-        };
+        LookupItem sampleItem3 = new("You can change save location", "Putting the data store location in OneDrive it will sync across devices");
         ItemsDictionary.Add(sampleItem3);
 
-        LookupItem sampleItem4 = new("Delete these initial rows", "and add your own manually if you like.")
-        {
-            Kind = LookupItemKind.Simple
-        };
+        LookupItem sampleItem4 = new("Delete these initial rows", "and add your own manually if you like.");
         ItemsDictionary.Add(sampleItem4);
 
         MainDataGrid.ItemsSource = null;
@@ -427,17 +362,11 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
     {
         if (MainDataGrid.ItemsSource is not List<LookupItem> lookUpList
             || lookUpList.FirstOrDefault() is not LookupItem firstLookupItem)
-        {
-            EditTextWindow etw = new(SearchBar.TextBox.Text, false);
-            etw.Show();
-            this.Close();
-            WindowUtilities.ShouldShutDown();
             return;
-        }
 
         isPuttingValueIn = true;
 
-        List<LookupItem> selectedLookupItems = [];
+        List<LookupItem> selectedLookupItems = new();
 
         foreach (object item in MainDataGrid.SelectedItems)
             if (item is LookupItem selectedLookupItem)
@@ -446,10 +375,10 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         if (selectedLookupItems.Count == 0)
             selectedLookupItems.Add(firstLookupItem);
 
-        bool openedHistoryItemOrLink = false;
         StringBuilder stringBuilder = new();
 
-        keysDown ??= KeyboardExtensions.GetKeyboardModifiersDown();
+        if (keysDown is null)
+            keysDown = KeyboardExtensions.GetKeyboardModifiersDown();
 
         switch (keysDown)
         {
@@ -468,29 +397,16 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 if (selectedLookupItems.FirstOrDefault() is not LookupItem lookupItem)
                     return;
 
-                if (Uri.TryCreate(lookupItem.LongValue, UriKind.Absolute, out Uri? uri))
+                if (Uri.TryCreate(lookupItem.longValue, UriKind.Absolute, out var uri))
                 {
-                    Process.Start(new ProcessStartInfo(lookupItem.LongValue) { UseShellExecute = true });
+                    Process.Start(new ProcessStartInfo(lookupItem.longValue) { UseShellExecute = true });
                     this.Close();
                     return;
                 }
                 break;
             case KeyboardModifiersDown.Ctrl:
-                if (selectedLookupItems.FirstOrDefault() is LookupItem ctrlItem
-                    && ctrlItem.Kind == LookupItemKind.GrabTemplate
-                    && ctrlItem.TemplateId is not null)
-                {
-                    GrabTemplate? ctrlTemplate = GrabTemplateManager.GetTemplateById(ctrlItem.TemplateId);
-                    if (ctrlTemplate is not null)
-                    {
-                        GrabFrame editFrame = new(ctrlTemplate);
-                        editFrame.Show();
-                    }
-                    openedHistoryItemOrLink = true;
-                    break;
-                }
                 foreach (LookupItem lItem in selectedLookupItems)
-                    stringBuilder.AppendLine(lItem.ShortValue);
+                    stringBuilder.AppendLine(lItem.shortValue);
                 break;
             case KeyboardModifiersDown.Shift:
                 foreach (LookupItem lItem in selectedLookupItems)
@@ -498,69 +414,8 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 break;
             default:
                 foreach (LookupItem lItem in selectedLookupItems)
-                {
-                    switch (lItem.Kind)
-                    {
-                        case LookupItemKind.EditWindow when lItem.HistoryItem is not null:
-                            {
-                                if (IsFromETW && DestinationTextBox is not null && string.IsNullOrWhiteSpace(DestinationTextBox.Text))
-                                {
-                                    DestinationTextBox.Text = lItem.HistoryItem.TextContent;
-                                    openedHistoryItemOrLink = true;
-                                    break;
-                                }
-
-                                EditTextWindow editTextWindow = new(lItem.HistoryItem);
-                                editTextWindow.Show();
-                                openedHistoryItemOrLink = true;
-                                break;
-                            }
-                        case LookupItemKind.GrabFrame when lItem.HistoryItem is not null:
-                            {
-                                GrabFrame gf = new(lItem.HistoryItem);
-                                gf.Show();
-                                openedHistoryItemOrLink = true;
-                                break;
-                            }
-                        case LookupItemKind.PdfDocument when lItem.HistoryItem is not null:
-                            {
-                                GrabFrame gf = !string.IsNullOrWhiteSpace(lItem.HistoryItem.SourcePath)
-                                    && File.Exists(lItem.HistoryItem.SourcePath)
-                                        ? new GrabFrame(lItem.HistoryItem, lItem.HistoryItem.SourcePath)
-                                        : new GrabFrame(lItem.HistoryItem);
-                                gf.Show();
-                                openedHistoryItemOrLink = true;
-                                break;
-                            }
-                        case LookupItemKind.Link:
-                            Process.Start(new ProcessStartInfo(lItem.LongValue) { UseShellExecute = true });
-                            openedHistoryItemOrLink = true;
-                            break;
-                        case LookupItemKind.Command:
-                            openedHistoryItemOrLink = await RunCli(lItem.LongValue);
-                            break;
-                        case LookupItemKind.GrabTemplate when lItem.TemplateId is not null:
-                            {
-                                this.Hide();
-                                WindowUtilities.LaunchFullScreenGrab(null, lItem.TemplateId);
-                                openedHistoryItemOrLink = true;
-                                break;
-                            }
-                        case LookupItemKind.Dynamic:
-                            break;
-                        default:
-                            stringBuilder.AppendLine(lItem.LongValue);
-                            break;
-                    }
-                }
+                    stringBuilder.AppendLine(lItem.longValue);
                 break;
-        }
-
-        if (openedHistoryItemOrLink)
-        {
-            this.Close();
-            WindowUtilities.ShouldShutDown();
-            return;
         }
 
         if (string.IsNullOrEmpty(stringBuilder.ToString()))
@@ -605,48 +460,6 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         WindowUtilities.ShouldShutDown();
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="longValue"></param>
-    /// <returns>returns if output is empty or whitespace</returns>
-    private async Task<bool> RunCli(string longValue)
-    {
-        string[] commands = longValue.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        if (commands.Length == 0)
-            return true;
-
-        BufferedCommandResult result = await Cli.Wrap("powershell")
-                                .WithArguments(commands)
-                                .WithValidation(CommandResultValidation.None)
-                                .ExecuteBufferedAsync(Encoding.UTF8);
-
-        string outputText = result.StandardOutput.Trim();
-        string errorText = result.StandardError.Trim();
-
-        string shortOutput = "Output";
-        if (string.IsNullOrWhiteSpace(outputText))
-        {
-            if (string.IsNullOrWhiteSpace(errorText))
-                return true;
-
-            shortOutput = "ERROR!";
-            outputText = errorText;
-        }
-
-        LookupItem newItem = new(shortOutput, outputText)
-        {
-            Kind = LookupItemKind.Simple
-        };
-
-        MainDataGrid.ItemsSource = null;
-        List<LookupItem> newItems = [newItem];
-        MainDataGrid.ItemsSource = newItems;
-
-        return false;
-    }
-
     private async void QuickSimpleLookup_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         switch (e.Key)
@@ -655,7 +468,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 if (IsEditingDataGrid)
                     return;
                 e.Handled = true;
-                if (SearchBar.TextBox is TextBox searchTextBox && searchTextBox.Text.Contains('\t'))
+                if (SearchBox is TextBox searchTextBox && searchTextBox.Text.Contains('\t'))
                 {
                     AddToLookUpResults('\t', searchTextBox.Text);
                     searchTextBox.Clear();
@@ -671,13 +484,13 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 e.Handled = true;
                 break;
             case Key.Delete:
-                if (IsEditingDataGrid || SearchBar.TextBox.IsFocused)
+                if (IsEditingDataGrid || SearchBox.IsFocused)
                     return;
                 RowDeleted();
                 e.Handled = true;
                 break;
             case Key.Down:
-                if (SearchBar.TextBox.IsFocused)
+                if (SearchBox.IsFocused)
                 {
                     int selectedIndex = MainDataGrid.SelectedIndex;
                     MainDataGrid.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
@@ -687,7 +500,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
             case Key.Q:
                 if (KeyboardExtensions.IsCtrlDown())
                 {
-                    SearchBar.TextBox.Focus();
+                    SearchBox.Focus();
                     e.Handled = true;
                 }
                 break;
@@ -701,7 +514,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
             case Key.F:
                 if (KeyboardExtensions.IsCtrlDown())
                 {
-                    WindowUtilities.LaunchFullScreenGrab(SearchBar.TextBox);
+                    WindowUtilities.LaunchFullScreenGrab(SearchBox);
                     e.Handled = true;
                 }
                 break;
@@ -719,13 +532,6 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                     e.Handled = true;
                 }
                 break;
-            case Key.R:
-                if (KeyboardExtensions.IsCtrlDown())
-                {
-                    SearchBar.UseRegex = !SearchBar.UseRegex;
-                    e.Handled = true;
-                }
-                break;
             case Key.End:
                 GoToEndOfMainDataGrid();
                 break;
@@ -737,7 +543,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         }
     }
 
-    private async Task LoadDataGridContent(string csvToOpenPath)
+    private async Task ReadCsvFileIntoQuickSimpleLookup(string csvToOpenPath)
     {
         string contentToParse = string.Empty;
 
@@ -749,20 +555,9 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         if (string.IsNullOrWhiteSpace(contentToParse))
             PopulateSampleData();
 
-        MainDataGrid.ItemsSource = null;
-        ItemsDictionary.Clear();
-
         ItemsDictionary.AddRange(ParseStringToRows(contentToParse, true));
-        lookupItems = [.. ItemsDictionary];
 
-        if (DefaultSettings.LookupSearchHistory)
-        {
-            AddHistoryItemsToItemsDictionary();
-            SearchHistory.IsChecked = true;
-        }
-
-        AddGrabTemplatesToItemsDictionary();
-
+        MainDataGrid.ItemsSource = null;
         MainDataGrid.ItemsSource = ItemsDictionary;
 
         UpdateRowCount();
@@ -770,7 +565,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private void RowDeleted()
     {
-        System.Collections.IEnumerable currentItemSource = MainDataGrid.ItemsSource;
+        var currentItemSource = MainDataGrid.ItemsSource;
         if (currentItemSource is not List<LookupItem> filteredLookupList)
             return;
 
@@ -783,19 +578,8 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
             if (item is LookupItem selectedLookupItem)
             {
                 filteredLookupList.Remove(selectedLookupItem);
-                lookupItems.Remove(selectedLookupItem);
                 ItemsDictionary.Remove(selectedLookupItem);
-
-                if (selectedLookupItem.HistoryItem is null)
-                {
-                    SaveBTN.Visibility = Visibility.Visible;
-                    continue;
-                }
-
-                if (selectedLookupItem.Kind is LookupItemKind.EditWindow)
-                    Singleton<HistoryService>.Instance.RemoveTextHistoryItem(selectedLookupItem.HistoryItem);
-                else if (selectedLookupItem.Kind is LookupItemKind.GrabFrame or LookupItemKind.PdfDocument)
-                    Singleton<HistoryService>.Instance.RemoveImageHistoryItem(selectedLookupItem.HistoryItem);
+                SaveBTN.Visibility = Visibility.Visible;
             }
         }
 
@@ -808,9 +592,17 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
         SaveBTN.Visibility = Visibility.Collapsed;
     }
 
-    private async Task ReSearch(string searchString)
+    private async void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (searchString.Contains('\t'))
+        if (sender is not TextBox searchingBox || !IsLoaded)
+            return;
+
+        if (string.IsNullOrEmpty(searchingBox.Text))
+            SearchLabel.Visibility = Visibility.Visible;
+        else
+            SearchLabel.Visibility = Visibility.Collapsed;
+
+        if (searchingBox.Text.Contains('\t'))
         {
             // a tab has been entered and this will be a new entry
             AddItemBtn.Visibility = Visibility.Visible;
@@ -822,9 +614,7 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         MainDataGrid.ItemsSource = null;
 
-        PatternItem? selectedPattern = SearchBar.SelectedPattern;
-
-        if (string.IsNullOrEmpty(searchString) && selectedPattern is null)
+        if (string.IsNullOrEmpty(searchingBox.Text))
         {
             MainDataGrid.ItemsSource = ItemsDictionary;
             MainDataGrid.CanUserAddRows = true;
@@ -836,13 +626,9 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 if (row is null)
                 {
                     MainDataGrid.UpdateLayout();
-
-                    if (lastSelectionInt > -1)
-                    {
-                        MainDataGrid.ScrollIntoView(MainDataGrid.Items[lastSelectionInt]);
-                        await Task.Delay(lastSelectionInt > maxMsDelay ? maxMsDelay : lastSelectionInt);
-                        row = (DataGridRow)MainDataGrid.ItemContainerGenerator.ContainerFromIndex(lastSelectionInt);
-                    }
+                    MainDataGrid.ScrollIntoView(MainDataGrid.Items[lastSelectionInt]);
+                    await Task.Delay(lastSelectionInt > maxMsDelay ? maxMsDelay : lastSelectionInt);
+                    row = (DataGridRow)MainDataGrid.ItemContainerGenerator.ContainerFromIndex(lastSelectionInt);
                 }
 
                 if (row is not null)
@@ -854,105 +640,30 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
                 MainDataGrid.SelectedIndex = lastSelectionInt;
                 lastSelection = null;
                 UpdateRowCount();
-                SearchBar.TextBox.Focus();
+                SearchBox.Focus();
                 return;
             }
         }
         else
             MainDataGrid.CanUserAddRows = false;
 
-        if (selectedPattern is not null)
-            PatternSearch(selectedPattern, searchString);
-        else if (SearchBar.UseRegex)
-            RegexSearch(searchString);
-        else
-            StandardSearch(searchString);
-
-        UpdateRowCount();
-    }
-
-    private void PatternSearch(PatternItem pattern, string searchString)
-    {
-        string lowerSearch = searchString.ToLower();
-        List<LookupItem> filteredList = [];
-
-        foreach (LookupItem lItem in ItemsDictionary)
-        {
-            string lItemAsString = lItem.ToString();
-
-            if (!PatternExecutor.HasMatch(pattern, lItemAsString))
-                continue;
-
-            // When search text is also present, narrow the pattern results by it.
-            if (!string.IsNullOrEmpty(lowerSearch)
-                && !lItemAsString.Contains(lowerSearch, StringComparison.CurrentCultureIgnoreCase)
-                && !lItem.FirstLettersString.Contains(lowerSearch, StringComparison.CurrentCultureIgnoreCase))
-                continue;
-
-            filteredList.Add(lItem);
-        }
-
-        MainDataGrid.ItemsSource = filteredList;
-
-        if (MainDataGrid.Items.Count > 0)
-            MainDataGrid.SelectedIndex = 0;
-    }
-
-    private void RegexSearch(string searchString)
-    {
-        Regex searchRegex;
-
-        try
-        {
-            searchRegex = new Regex(searchString, RegexOptions.IgnoreCase);
-        }
-        catch
-        {
-            SearchBar.SetRegexValidity(false);
-            return;
-        }
-
-        SearchBar.SetRegexValidity(true);
-
-        List<LookupItem> filteredList = [];
-
-        foreach (LookupItem lItem in ItemsDictionary)
-        {
-            string lItemAsString = lItem.ToString().ToLower();
-
-            if (searchRegex.IsMatch(lItemAsString)
-                || lItem.FirstLettersString.Contains(SearchBar.TextBox.Text.ToLower(), StringComparison.CurrentCultureIgnoreCase))
-                filteredList.Add(lItem);
-        }
-
-        MainDataGrid.ItemsSource = filteredList;
-
-        if (MainDataGrid.Items.Count > 0)
-            MainDataGrid.SelectedIndex = 0;
-    }
-
-    private void StandardSearch(string searchString)
-    {
-        SearchBar.SetRegexValidity(true);
-
-        List<string> searchArray = [.. searchString.ToLower().Split()];
+        List<string> searchArray = SearchBox.Text.ToLower().Split().ToList();
         searchArray.Sort();
 
-        List<LookupItem> filteredList = [];
+        List<LookupItem> filteredList = new List<LookupItem>();
 
         foreach (LookupItem lItem in ItemsDictionary)
         {
             string lItemAsString = lItem.ToString().ToLower();
             bool matchAllSearchWords = true;
 
-            foreach (string searchWord in searchArray)
+            foreach (var searchWord in searchArray)
             {
                 if (!lItemAsString.Contains(searchWord))
                     matchAllSearchWords = false;
             }
 
-            if (matchAllSearchWords
-                || lItem.FirstLettersString.Contains(SearchBar.TextBox.Text.ToLower(), StringComparison.CurrentCultureIgnoreCase))
+            if (matchAllSearchWords)
                 filteredList.Add(lItem);
         }
 
@@ -960,6 +671,8 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         if (MainDataGrid.Items.Count > 0)
             MainDataGrid.SelectedIndex = 0;
+
+        UpdateRowCount();
     }
 
     private void TextGrabSettingsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -978,9 +691,9 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        await LoadDataGridContent(DefaultSettings.LookupFileLocation);
+        await ReadCsvFileIntoQuickSimpleLookup(Settings.Default.LookupFileLocation);
 
-        if (DefaultSettings.TryInsert && !IsFromETW)
+        if (Settings.Default.TryInsert && !IsFromETW)
             PasteToggleButton.IsChecked = true;
 
         if (IsFromETW)
@@ -988,65 +701,27 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
 
         Topmost = false;
         Activate();
-        SearchBar.TextBox.Focus();
+        SearchBox.Focus();
     }
-
-    private void AddHistoryItemsToItemsDictionary()
-    {
-        List<HistoryInfo> textHistoryItems = Singleton<HistoryService>.Instance.GetEditWindows();
-
-        foreach (HistoryInfo historyItem in textHistoryItems)
-        {
-            LookupItem newItem = new(historyItem);
-            ItemsDictionary.Add(newItem);
-        }
-
-        List<HistoryInfo> grabFrameHistoryItems = Singleton<HistoryService>.Instance.GetRecentGrabs();
-
-        foreach (HistoryInfo historyItem in grabFrameHistoryItems)
-        {
-            LookupItem newItem = new(historyItem);
-            ItemsDictionary.Add(newItem);
-        }
-
-        foreach (HistoryInfo historyItem in Singleton<HistoryService>.Instance.GetRecentPdfDocuments())
-        {
-            LookupItem newItem = new(historyItem);
-            ItemsDictionary.Add(newItem);
-        }
-    }
-
-    private void AddGrabTemplatesToItemsDictionary()
-    {
-        List<GrabTemplate> templates = GrabTemplateManager.GetAllTemplates();
-
-        foreach (GrabTemplate template in templates)
-        {
-            LookupItem item = new(template.Name, template.OutputTemplate)
-            {
-                Kind = LookupItemKind.GrabTemplate,
-                TemplateId = template.Id,
-            };
-            ItemsDictionary.Add(item);
-        }
-    }
-
     private async Task WriteDataToCSV()
     {
-        if (!string.IsNullOrWhiteSpace(SearchBar.TextBox.Text))
-            SearchBar.TextBox.Clear();
+        if (!string.IsNullOrWhiteSpace(SearchBox.Text))
+            SearchBox.Clear();
 
         StringBuilder csvContents = new();
 
-        foreach (LookupItem lookupItem in lookupItems)
+        if (MainDataGrid.ItemsSource is not List<LookupItem> itemsToSave)
+            return;
+
+        foreach (LookupItem lookupItem in itemsToSave)
             csvContents.AppendLine(lookupItem.ToCSVString());
 
         try
         {
-            if (string.IsNullOrEmpty(DefaultSettings.LookupFileLocation))
+            if (string.IsNullOrEmpty(Settings.Default.LookupFileLocation))
                 await FileUtilities.SaveTextFile(csvContents.ToString(), cacheFilename, FileStorageKind.WithExe);
             else
-                await FileUtilities.SaveTextFile(csvContents.ToString(), DefaultSettings.LookupFileLocation, FileStorageKind.Absolute);
+                await FileUtilities.SaveTextFile(csvContents.ToString(), Settings.Default.LookupFileLocation, FileStorageKind.Absolute);
 
             SaveBTN.Visibility = Visibility.Collapsed;
         }
@@ -1055,92 +730,5 @@ public partial class QuickSimpleLookup : Wpf.Ui.Controls.FluentWindow
             System.Windows.Forms.MessageBox.Show($"Failed to save csv file. {ex.Message}");
         }
     }
-
-    private void FluentWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
-    {
-        // Can't do this here because it will close the app before the text can be inserted
-        // WindowUtilities.ShouldShutDown();
-    }
-
-    private async void SearchHistory_Click(object sender, RoutedEventArgs e)
-    {
-        DefaultSettings.LookupSearchHistory = SearchHistory.IsChecked is true;
-
-        lookupItems.Clear();
-        ItemsDictionary.Clear();
-        MainDataGrid.ItemsSource = null;
-
-        await LoadDataGridContent(DefaultSettings.LookupFileLocation);
-    }
-
-    private void DeleteItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (MainDataGrid.SelectedItem is not LookupItem lookupItem)
-            return;
-
-        RowDeleted();
-    }
-
-    private void OpenInETWMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (MainDataGrid.SelectedItem is not LookupItem lookupItem)
-            return;
-
-        switch (lookupItem.Kind)
-        {
-            case LookupItemKind.Simple:
-                StringBuilder sb = new();
-                sb.Append(lookupItem.ShortValue);
-                sb.Append(Environment.NewLine);
-                sb.AppendLine(lookupItem.LongValue);
-                EditTextWindow etw = new(sb.ToString(), false);
-                etw.Show();
-                break;
-            case LookupItemKind.EditWindow:
-                if (lookupItem.HistoryItem is not null)
-                {
-                    EditTextWindow editTextWindow = new(lookupItem.HistoryItem);
-                    editTextWindow.Show();
-                    return;
-                }
-
-                EditTextWindow etw2 = new(lookupItem.LongValue, false);
-                etw2.Show();
-                break;
-            case LookupItemKind.GrabFrame:
-                if (lookupItem.HistoryItem is not null)
-                {
-                    EditTextWindow editTextWindow = new(lookupItem.HistoryItem);
-                    editTextWindow.Show();
-                    return;
-                }
-
-                EditTextWindow etw3 = new(lookupItem.LongValue, false);
-                etw3.Show();
-                break;
-            case LookupItemKind.PdfDocument:
-                if (lookupItem.HistoryItem is not null)
-                {
-                    GrabFrame pdfFrame = !string.IsNullOrWhiteSpace(lookupItem.HistoryItem.SourcePath)
-                        && File.Exists(lookupItem.HistoryItem.SourcePath)
-                            ? new GrabFrame(lookupItem.HistoryItem, lookupItem.HistoryItem.SourcePath)
-                            : new GrabFrame(lookupItem.HistoryItem);
-                    pdfFrame.Show();
-                    return;
-                }
-                break;
-            case LookupItemKind.Link:
-                StringBuilder sb2 = new();
-                sb2.Append(lookupItem.ShortValue);
-                sb2.Append(Environment.NewLine);
-                sb2.AppendLine(lookupItem.LongValue);
-                EditTextWindow etw4 = new(sb2.ToString(), false);
-                etw4.Show();
-                break;
-            default:
-                break;
-        }
-    }
-
     #endregion Methods
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
+using System.Windows.Input;
 using Text_Grab.Models;
 
 namespace Text_Grab.Utilities;
@@ -23,13 +24,12 @@ public static partial class HotKeyManager
             return null;
     }
 
-    public static int? RegisterHotKey(Keys key, KeyModifiers modifiers)
+    public static int RegisterHotKey(Keys key, KeyModifiers modifiers)
     {
         _windowReadyEvent?.WaitOne();
-        int id = Interlocked.Increment(ref _id);
-        object? result = _wnd?.Invoke(new RegisterHotKeyDelegate(RegisterHotKeyInternal), _hwnd, id, (uint)modifiers, (uint)key);
-        bool registered = result is bool success && success;
-        return registered ? id : null;
+        int id = System.Threading.Interlocked.Increment(ref _id);
+        _wnd?.Invoke(new RegisterHotKeyDelegate(RegisterHotKeyInternal), _hwnd, id, (uint)modifiers, (uint)key);
+        return id;
     }
 
     public static void UnregisterHotKey(int id)
@@ -37,13 +37,12 @@ public static partial class HotKeyManager
         _wnd?.Invoke(new UnRegisterHotKeyDelegate(UnRegisterHotKeyInternal), _hwnd, id);
     }
 
-    private delegate bool RegisterHotKeyDelegate(IntPtr hwnd, int id, uint modifiers, uint key);
+    delegate void RegisterHotKeyDelegate(IntPtr hwnd, int id, uint modifiers, uint key);
+    delegate void UnRegisterHotKeyDelegate(IntPtr hwnd, int id);
 
-    private delegate void UnRegisterHotKeyDelegate(IntPtr hwnd, int id);
-
-    private static bool RegisterHotKeyInternal(IntPtr hwnd, int id, uint modifiers, uint key)
+    private static void RegisterHotKeyInternal(IntPtr hwnd, int id, uint modifiers, uint key)
     {
-        return RegisterHotKey(hwnd, id, modifiers, key);
+        RegisterHotKey(hwnd, id, modifiers, key);
     }
 
     private static void UnRegisterHotKeyInternal(IntPtr hwnd, int id)
@@ -53,26 +52,27 @@ public static partial class HotKeyManager
 
     private static void OnHotKeyPressed(HotKeyEventArgs e)
     {
-        HotKeyManager.HotKeyPressed?.Invoke(null, e);
+        if (HotKeyManager.HotKeyPressed != null)
+        {
+            HotKeyManager.HotKeyPressed(null, e);
+        }
     }
 
     private static volatile MessageWindow? _wnd;
     private static volatile IntPtr _hwnd;
-    private static readonly ManualResetEvent? _windowReadyEvent = new(false);
+    private static ManualResetEvent? _windowReadyEvent = new ManualResetEvent(false);
     static HotKeyManager()
     {
-        Thread messageLoop = new(delegate ()
+        Thread messageLoop = new Thread(delegate ()
           {
               Application.Run(new MessageWindow());
-          })
-        {
-            Name = "MessageLoopThread",
-            IsBackground = true
-        };
+          });
+        messageLoop.Name = "MessageLoopThread";
+        messageLoop.IsBackground = true;
         messageLoop.Start();
     }
 
-    private partial class MessageWindow : Form
+    private class MessageWindow : Form
     {
         public MessageWindow()
         {
@@ -85,7 +85,7 @@ public static partial class HotKeyManager
         {
             if (m.Msg == WM_HOTKEY)
             {
-                HotKeyEventArgs e = new(m.LParam);
+                HotKeyEventArgs e = new HotKeyEventArgs(m.LParam);
                 HotKeyManager.OnHotKeyPressed(e);
             }
 

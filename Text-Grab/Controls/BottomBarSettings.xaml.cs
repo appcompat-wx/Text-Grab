@@ -1,53 +1,37 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
 using Text_Grab.Models;
 using Text_Grab.Properties;
 using Text_Grab.Utilities;
 using Wpf.Ui.Controls;
-using TextBox = Wpf.Ui.Controls.TextBox;
 
 namespace Text_Grab.Controls;
 
 public partial class BottomBarSettings : FluentWindow
 {
-    private readonly Settings DefaultSettings = AppUtilities.TextGrabSettings;
-
     #region Constructors
 
     public BottomBarSettings()
     {
         InitializeComponent();
 
-        bool canUseCopilotPlus = WindowsAiUtilities.CanDeviceUseWinAI();
-        List<ButtonInfo> allBtns = [.. ButtonInfo.AllButtons
-            .Where(b => !b.RequiresCopilotPlus || canUseCopilotPlus)];
+        List<ButtonInfo> allBtns = new(ButtonInfo.AllButtons);
 
-        ButtonsInRightList = [.. CustomBottomBarUtilities.GetCustomBottomBarItemsSetting()
-            .Where(b => !b.RequiresCopilotPlus || canUseCopilotPlus)];
+        ButtonsInRightList = new(CustomBottomBarUtilities.GetCustomBottomBarItemsSetting());
         RightListBox.ItemsSource = ButtonsInRightList;
         foreach (ButtonInfo cbutton in ButtonsInRightList)
         {
             allBtns.Remove(cbutton);
         }
 
-        ButtonsInLeftList = [.. allBtns];
+        ButtonsInLeftList = new(allBtns);
         LeftListBox.ItemsSource = ButtonsInLeftList;
-        _leftListView = CollectionViewSource.GetDefaultView(ButtonsInLeftList);
 
-        ShowCursorTextCheckBox.IsChecked = DefaultSettings.ShowCursorText;
-        ShowScrollbarCheckBox.IsChecked = DefaultSettings.ScrollBottomBar;
-        ShowLanguagePickerToggle.IsChecked = DefaultSettings.EtwShowLangPicker;
-        ShowWordCountToggle.IsChecked = DefaultSettings.EtwShowWordCount;
-        ShowCharDetailsToggle.IsChecked = DefaultSettings.EtwShowCharDetails;
-        ShowMatchCountToggle.IsChecked = DefaultSettings.EtwShowMatchCount;
-        ShowRegexPatternToggle.IsChecked = DefaultSettings.EtwShowRegexPattern;
-        ShowSimilarMatchesToggle.IsChecked = DefaultSettings.EtwShowSimilarMatches;
+        ShowCursorTextCheckBox.IsChecked = Settings.Default.ShowCursorText;
+        ShowScrollbarCheckBox.IsChecked = Settings.Default.ScrollBottomBar;
     }
 
     #endregion Constructors
@@ -56,7 +40,6 @@ public partial class BottomBarSettings : FluentWindow
 
     private ObservableCollection<ButtonInfo> ButtonsInLeftList { get; set; }
     private ObservableCollection<ButtonInfo> ButtonsInRightList { get; set; }
-    private ICollectionView _leftListView = null!;
 
     #endregion Properties
 
@@ -101,14 +84,6 @@ public partial class BottomBarSettings : FluentWindow
         this.Close();
     }
 
-    private void FilterSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        string filter = (sender as TextBox)?.Text.Trim() ?? string.Empty;
-        _leftListView.Filter = string.IsNullOrEmpty(filter)
-            ? null
-            : obj => obj is ButtonInfo btn && btn.ButtonText.Contains(filter, StringComparison.OrdinalIgnoreCase);
-    }
-
     private void MoveDownButton_Click(object sender, RoutedEventArgs e)
     {
         int newIndex = MoveDown(ButtonsInRightList, RightListBox.SelectedIndex);
@@ -140,15 +115,9 @@ public partial class BottomBarSettings : FluentWindow
     }
     private void SaveBTN_Click(object sender, RoutedEventArgs e)
     {
-        DefaultSettings.ShowCursorText = ShowCursorTextCheckBox.IsChecked ?? true;
-        DefaultSettings.ScrollBottomBar = ShowScrollbarCheckBox.IsChecked ?? true;
-        DefaultSettings.EtwShowLangPicker = ShowLanguagePickerToggle.IsChecked ?? true;
-        DefaultSettings.EtwShowWordCount = ShowWordCountToggle.IsChecked ?? true;
-        DefaultSettings.EtwShowCharDetails = ShowCharDetailsToggle.IsChecked ?? true;
-        DefaultSettings.EtwShowMatchCount = ShowMatchCountToggle.IsChecked ?? true;
-        DefaultSettings.EtwShowRegexPattern = ShowRegexPatternToggle.IsChecked ?? true;
-        DefaultSettings.EtwShowSimilarMatches = ShowSimilarMatchesToggle.IsChecked ?? true;
-        DefaultSettings.Save();
+        Settings.Default.ShowCursorText = ShowCursorTextCheckBox.IsChecked ?? true;
+        Settings.Default.ScrollBottomBar = ShowScrollbarCheckBox.IsChecked ?? true;
+        Settings.Default.Save();
 
         CustomBottomBarUtilities.SaveCustomBottomBarItemsSetting(ButtonsInRightList.ToList());
         if (Owner is EditTextWindow etw)

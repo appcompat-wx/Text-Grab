@@ -1,27 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 using Text_Grab;
+using System.Linq;
 using Text_Grab.Utilities;
 
 namespace Tests;
 
 public class StringMethodTests
 {
-    private sealed class PredictableRandom(params int[] values) : Random
-    {
-        private readonly Queue<int> values = new(values);
-
-        public override int Next(int maxValue)
-        {
-            Assert.NotEmpty(values);
-
-            int nextValue = values.Dequeue();
-            Assert.InRange(nextValue, 0, maxValue - 1);
-            return nextValue;
-        }
-    }
-
     [Fact]
     public void MakeMultiLineStringSingleLine()
     {
@@ -38,42 +23,6 @@ lines
         Assert.Equal(lineOfText, bodyOfText.MakeStringSingleLine());
     }
 
-    [Fact]
-    public void MakeStringSingleLine_NewlineOnly_ReturnsEmptyString()
-    {
-        Assert.Equal(string.Empty, Environment.NewLine.MakeStringSingleLine());
-    }
-
-    [Fact]
-    public void JoinLines_WithJoiningTextAndAffixes_AsExpected()
-    {
-        string input = $"alpha{Environment.NewLine}beta{Environment.NewLine}gamma";
-
-        string actual = input.JoinLines(", ", trimLineBeforeJoining: false, "[", "]");
-
-        Assert.Equal("[alpha, beta, gamma]", actual);
-    }
-
-    [Fact]
-    public void JoinLines_TrimEachLineBeforeJoining_AsExpected()
-    {
-        string input = " alpha \r\n\tbeta\t\r\ngamma  ";
-
-        string actual = input.JoinLines(" | ", trimLineBeforeJoining: true);
-
-        Assert.Equal("alpha | beta | gamma", actual);
-    }
-
-    [Fact]
-    public void JoinLines_TrailingLineBreak_DoesNotAddExtraJoiningText()
-    {
-        const string input = "alpha\nbeta\n";
-
-        string actual = input.JoinLines(", ", trimLineBeforeJoining: false);
-
-        Assert.Equal("alpha, beta", actual);
-    }
-
     [Theory]
     [InlineData("", "")]
     [InlineData("is", "This is test string data")]
@@ -85,28 +34,6 @@ lines
         (int start, int length) = fullLine.CursorWordBoundaries(6);
         string singleWordAtSix = fullLine.Substring(start, length);
         Assert.Equal(expectedWord, singleWordAtSix);
-    }
-
-    [Theory]
-    [InlineData("there", "hello there", 11)]
-    [InlineData("world", "hello world", 10)]
-    [InlineData("Alpha", "Alpha", 5)]
-    [InlineData("hello", " hello", 0)]
-    public void CursorWordBoundaries_ClampsEndOfTextToNearestWord(string expectedWord, string input, int cursorPosition)
-    {
-        (int start, int length) = input.CursorWordBoundaries(cursorPosition);
-
-        Assert.Equal(expectedWord, input.Substring(start, length));
-    }
-
-    [Fact]
-    public void CursorWordBoundaries_AllWhitespace_ReturnsEmptyRange()
-    {
-        const string input = "   ";
-
-        (int start, int length) = input.CursorWordBoundaries(1);
-
-        Assert.Equal(string.Empty, input.Substring(start, length));
     }
 
     private static string multiLineInput = @"Hello this is lots 
@@ -154,9 +81,9 @@ to throw off any easy check";
 
     [Theory]
     [InlineData("", "")]
-    [InlineData("Hello, world! 0123456789", "Hello, world! olz3hSb7Bg")]
+    [InlineData("Hello, world! 0123456789", "Hello, world! ol23h5678g")]
     [InlineData("Foo 4r b4r", "Foo hr bhr")]
-    [InlineData("B4zz5 9zzl3", "BhzzS gzzl3")]
+    [InlineData("B4zz 9zzl3", "Bhzz gzzl3")]
     [InlineData("abcdefghijklmnop", "abcdefghijklmnop")]
     public void TryFixToLetters_ReplacesDigitsWithLetters_AsExpected(string input, string expected)
     {
@@ -168,7 +95,7 @@ to throw off any easy check";
     }
 
     [Theory]
-    [InlineData("", "")]
+    [InlineData("","")]
     [InlineData("he11o there", "hello there")]
     [InlineData("my number is l23456789o", "my number is 1234567890")]
     public void TryFixNumOrLetters(string input, string expected)
@@ -179,10 +106,10 @@ to throw off any easy check";
 
     [Theory]
     [InlineData("", "")]
-    [InlineData("Hello, world! 0123456789", "4e110, w0r1d! 0123456789")]
-    [InlineData("Foo 4r b4r", "F00 4r 64r")]
-    [InlineData("B4zzS 9zzl3", "84225 92213")]
-    [InlineData("abcdefghijklmnopqrs", "a60def941jk1mn0pqr5")]
+    [InlineData("Hello, world! 0123456789", "He110, w0r1d! 0123456789")]
+    [InlineData("Foo 4r b4r", "F00 4r b4r")]
+    [InlineData("B4zz 9zzl3", "B4zz 9zz13")]
+    [InlineData("abcdefghijklmnop", "ab0def9h1jk1mn0p")]
     public void TryFixToLetters_ReplacesLettersWithDigits_AsExpected(string input, string expected)
     {
         // Act
@@ -214,34 +141,6 @@ Another Line";
         Assert.Equal(expectedString, actualString);
     }
 
-    [Fact]
-    public void ShuffleLines_UsesProvidedRandom()
-    {
-        string inputString = @"one
-two
-three
-four";
-
-        string actualString = inputString.ShuffleLines(new PredictableRandom(1, 1, 0));
-
-        Assert.Equal(
-            @"three
-one
-four
-two",
-            actualString);
-    }
-
-    [Fact]
-    public void ShuffleLines_PreservesTrailingNewline()
-    {
-        string inputString = $"alpha{Environment.NewLine}beta{Environment.NewLine}";
-
-        string actualString = inputString.ShuffleLines(new PredictableRandom(0));
-
-        Assert.Equal($"beta{Environment.NewLine}alpha{Environment.NewLine}", actualString);
-    }
-
     // { ' ', '"', '*', '/', ':', '<', '>', '?', '\\', '|', '+', ',', '.', ';', '=', '[', ']', '!', '@' }; 
     [Theory]
     [InlineData("", "")]
@@ -262,32 +161,15 @@ two",
     }
 
     [Theory]
-    [InlineData("", @"", 3)]
-    [InlineData("Hello World!", @"[A-Za-z]{5}\s[A-Za-z]{5}!", 3)]
-    [InlineData("123-555-6789", @"\d{3}-\d{3}-\d{4}", 3)]
-    [InlineData("(123)-555-6789", @"(\()\d{3}(\))-\d{3}-\d{4}", 3)]
-    [InlineData("Abc123456-99", @"[A-Za-z]{3}\d{6}-\d{2}", 3)]
-    [InlineData("ab12ab12ab12ab12ab12", @"([A-Za-z]{2}\d{2}){5}", 3)]
-    // Precision level 0 tests (least precise - non-whitespace)
-    [InlineData("Abc123", @"\S+", 0)]
-    [InlineData("Hello World", @"\S+", 0)]
-    // Precision level 1 tests (word characters)
-    [InlineData("Abc123", @"\w+", 1)]
-    [InlineData("Test456", @"\w+", 1)]
-    // Precision level 2 tests (word characters with count)
-    [InlineData("Abc123", @"\w{3}\w{3}", 2)]
-    [InlineData("Hello", @"\w{5}", 2)]
-    // Precision level 4 tests (individual character class per position with case variants)
-    [InlineData("Abc", @"(?i)Abc", 4)]
-    [InlineData("123", @"(?i)123", 4)]
-    [InlineData("Test", @"(?i)Test", 4)]
-    // Precision level 5 tests (exact escaped string - most precise)
-    [InlineData("Abc123", @"Abc123", 5)]
-    [InlineData("Test", @"Test", 5)]
-    [InlineData("Hello World!", @"Hello\ World!", 5)]
-    public void ExtractSimplePatternFromEachString(string inputString, string expectedString, int precisionLevel)
+    [InlineData("", @"")]
+    [InlineData("Hello World!", @"[A-z]{5}\s[A-z]{5}!")]
+    [InlineData("123-555-6789", @"\d{3}-\d{3}-\d{4}")]
+    [InlineData("(123)-555-6789", @"(\()\d{3}(\))-\d{3}-\d{4}")]
+    [InlineData("Abc123456-99", @"[A-z]{3}\d{6}-\d{2}")]
+    [InlineData("ab12ab12ab12ab12ab12", @"([A-z]{2}\d{2}){5}")]
+    public void ExtractSimplePatternFromEachString(string inputString, string expectedString)
     {
-        string actualString = inputString.ExtractSimplePattern(precisionLevel);
+        string actualString = inputString.ExtractSimplePattern();
         Assert.Equal(expectedString, actualString);
     }
 
@@ -529,14 +411,5 @@ you are a bold one!", @"", 0, SpotInLine.End)]
     public void TestLimitEachLine(string inputString, string expected, int charLimit, SpotInLine spotInLine)
     {
         Assert.Equal(expected, inputString.LimitCharactersPerLine(charLimit, spotInLine));
-    }
-
-    [Theory]
-    [InlineData("g7a56312-d8e8-4ca5-87fa-18e3S266d3le", "97a56312-d8e8-4ca5-87fa-18e35266d31e")]
-    [InlineData("g7a56312-d8e 8-4ca5-87fa-18e3S2 66d3le", "97a56312-d8e8-4ca5-87fa-18e35266d31e")]
-    [InlineData("g7a56312-\r\nd8e8\r\n-4ca5-87fa-18e3S266d3le", "97a56312-d8e8-4ca5-87fa-18e35266d31e")]
-    public void TestGuidCorrections(string input, string expected)
-    {
-        Assert.Equal(expected, input.CorrectCommonGuidErrors());
     }
 }

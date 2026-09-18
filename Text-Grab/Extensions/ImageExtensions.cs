@@ -27,16 +27,16 @@ internal static class ImageExtensions
             return RotateFlipType.RotateNoneFlipNone;
 
         int val = BitConverter.ToUInt16(propValue, 0);
-        RotateFlipType rot = RotateFlipType.RotateNoneFlipNone;
+        var rot = RotateFlipType.RotateNoneFlipNone;
 
-        if (val is 3 or 4)
+        if (val == 3 || val == 4)
             rot = RotateFlipType.Rotate180FlipNone;
-        else if (val is 5 or 6)
+        else if (val == 5 || val == 6)
             rot = RotateFlipType.Rotate90FlipNone;
-        else if (val is 7 or 8)
+        else if (val == 7 || val == 8)
             rot = RotateFlipType.Rotate270FlipNone;
 
-        if (val is 2 or 4 or 5 or 7)
+        if (val == 2 || val == 4 || val == 5 || val == 7)
             rot |= RotateFlipType.RotateNoneFlipX;
 
         return rot;

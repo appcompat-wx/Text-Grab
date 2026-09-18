@@ -9,7 +9,7 @@ public class QrCodeTests
     public void generateSvgImage()
     {
         string testString = "This is only a test";
-        ZXing.Rendering.SvgRenderer.SvgImage svg = BarcodeUtilities.GetSvgQrCodeForText(testString, ErrorCorrectionLevel.L);
+        var svg = BarcodeUtilities.GetSvgQrCodeForText(testString, ErrorCorrectionLevel.L);
 
         Assert.NotNull(svg);
     }

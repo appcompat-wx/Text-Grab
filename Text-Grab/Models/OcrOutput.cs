@@ -1,8 +1,8 @@
 ﻿using System.Drawing;
-using Text_Grab.Interfaces;
 using Text_Grab.Properties;
 using Text_Grab.Utilities;
-using Windows.Graphics.Imaging;
+using Windows.Globalization;
+using Windows.Media.Ocr;
 
 namespace Text_Grab.Models;
 
@@ -13,18 +13,17 @@ public record OcrOutput
     public string RawOutput { get; set; } = string.Empty;
     public string CleanedOutput { get; set; } = string.Empty;
     public Bitmap? SourceBitmap { get; set; }
-    public SoftwareBitmap? SourceSoftwareBitmap { get; set; }
-    public ILanguage? Language { get; set; }
+    public Language? Language { get; set; }
 
     public void CleanOutput()
     {
-        if (AppUtilities.TextGrabSettings is not Settings userSettings
+        if (Settings.Default is not Settings userSettings
             || Kind == OcrOutputKind.Barcode)
             return;
 
         string correctingString = RawOutput;
 
-        if (userSettings.CorrectToLatin && Language?.IsLatinBased() == true)
+        if (userSettings.CorrectToLatin)
             correctingString = correctingString.ReplaceGreekOrCyrillicWithLatin();
 
         if (userSettings.CorrectErrors)

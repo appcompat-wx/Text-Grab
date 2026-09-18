@@ -1,88 +1,26 @@
-﻿using Humanizer;
-using System;
-using System.Linq;
+﻿using System;
 
 namespace Text_Grab.Models;
 
-public enum LookupItemKind
-{
-    Simple = 0,
-    EditWindow = 1,
-    GrabFrame = 2,
-    Link = 3,
-    Command = 4,
-    Dynamic = 5,
-    GrabTemplate = 6,
-    PdfDocument = 7,
-}
-
 public class LookupItem : IEquatable<LookupItem>
 {
-    public string ShortValue { get; set; } = string.Empty;
-    public string LongValue { get; set; } = string.Empty;
-
-    public Wpf.Ui.Controls.SymbolRegular UiSymbol
-    {
-        get
-        {
-            return Kind switch
-            {
-                LookupItemKind.Simple => Wpf.Ui.Controls.SymbolRegular.Copy20,
-                LookupItemKind.EditWindow => Wpf.Ui.Controls.SymbolRegular.Window24,
-                LookupItemKind.GrabFrame => Wpf.Ui.Controls.SymbolRegular.PanelBottom20,
-                LookupItemKind.Link => Wpf.Ui.Controls.SymbolRegular.Link24,
-                LookupItemKind.Command => Wpf.Ui.Controls.SymbolRegular.WindowConsole20,
-                LookupItemKind.Dynamic => Wpf.Ui.Controls.SymbolRegular.Flash24,
-                LookupItemKind.GrabTemplate => Wpf.Ui.Controls.SymbolRegular.DocumentTableSearch24,
-                LookupItemKind.PdfDocument => Wpf.Ui.Controls.SymbolRegular.DocumentSearch24,
-                _ => Wpf.Ui.Controls.SymbolRegular.Copy20,
-            };
-        }
-    }
-
-    public LookupItemKind Kind { get; set; } = LookupItemKind.Simple;
+    public string shortValue { get; set; } = string.Empty;
+    public string longValue { get; set; } = string.Empty;
 
     public LookupItem()
     {
 
     }
 
-    public string FirstLettersString => string.Join("", ShortValue.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(s => s[0])).ToLower();
-
     public LookupItem(string sv, string lv)
     {
-        ShortValue = sv;
-        LongValue = lv;
+        shortValue = sv;
+        longValue = lv;
     }
 
-    public LookupItem(HistoryInfo historyInfo)
-    {
-        ShortValue = historyInfo.CaptureDateTime.Humanize() + Environment.NewLine + historyInfo.CaptureDateTime.ToString("F");
-        LongValue = historyInfo.TextContent.Length > 100 ? historyInfo.TextContent[..100].Trim() + "…" : historyInfo.TextContent.Trim();
+    public override string ToString() => $"{shortValue} {longValue}";
 
-        HistoryItem = historyInfo;
-
-        if (historyInfo.IsPdfDocument)
-            Kind = LookupItemKind.PdfDocument;
-        else if (string.IsNullOrEmpty(historyInfo.ImagePath))
-            Kind = LookupItemKind.EditWindow;
-        else
-            Kind = LookupItemKind.GrabFrame;
-    }
-
-    public HistoryInfo? HistoryItem { get; set; }
-
-    public string? TemplateId { get; set; }
-
-    public override string ToString()
-    {
-        if (HistoryItem is not null)
-            return $"{HistoryItem.CaptureDateTime:F} {HistoryItem.TextContent}";
-
-        return $"{ShortValue} {LongValue}";
-    }
-
-    public string ToCSVString() => $"{ShortValue},{LongValue}";
+    public string ToCSVString() => $"{shortValue},{longValue}";
 
     public bool Equals(LookupItem? other)
     {

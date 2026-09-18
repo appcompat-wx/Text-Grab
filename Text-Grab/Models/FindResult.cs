@@ -5,8 +5,6 @@ public class FindResult
 {
     public string Text { get; set; } = "";
 
-    public string RawText { get; set; } = "";
-
     public int Count { get; set; } = 0;
 
     public int Index { get; set; }
@@ -15,22 +13,11 @@ public class FindResult
 
     public string PreviewRight { get; set; } = "";
 
-    public int Length { get; set; }
-
-    public int? RowIndex { get; set; }
-
-    public int? ColumnIndex { get; set; }
-
-    public string CellAddress
+    public int Length
     {
         get
         {
-            if (RowIndex is null || ColumnIndex is null) return string.Empty;
-            string colLabel = EditTextTableDocument.GetSpreadsheetColumnLabel(ColumnIndex.Value);
-            return $"Cell: {colLabel}{RowIndex.Value + 1}";
+            return Text.Length;
         }
     }
-
-    public string LocationDisplay =>
-        CellAddress.Length > 0 ? CellAddress : $"At index: {Index}";
 }
